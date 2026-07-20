@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import contextlib
 import importlib
@@ -63,9 +61,6 @@ def excludes_backend(*backends, reason=None):
 
 
 class ActualExpected(namedtuple("LazyComparison", ["actual", "expected"])):
-    """
-    Lazy string formatter for test assertions.
-    """
 
     def __repr__(self):
         return "\n".join(["Expected:", str(self.expected), "Actual:", str(self.actual)])
@@ -147,8 +142,6 @@ def assert_close(actual, expected, atol=1e-6, rtol=1e-6):
             assert_close(actual_point, expected_point, atol=atol, rtol=rtol)
             assert_close(actual_log_density, expected_log_density, atol=atol, rtol=rtol)
     elif isinstance(actual, Gaussian):
-        # Note white_vec and prec_sqrt are expected to agree only up to an
-        # orthogonal factor, but precision and info_vec should agree exactly.
         assert_close(actual._info_vec, expected._info_vec, atol=atol, rtol=rtol)
         assert_close(actual._precision, expected._precision, atol=atol, rtol=rtol)
     elif isinstance(actual, Contraction):
@@ -240,13 +233,11 @@ def check_funsor(x, inputs, output, data=None):
             x_data = x.align(tuple(inputs)).data
         if inputs or output.shape:
             if get_backend() == "jax":
-                # JAX has numerical errors for reducing ops.
                 assert_close(x_data, data)
             else:
                 assert (x_data == data).all()
         else:
             if get_backend() in ["jax", "numpy"]:
-                # JAX has numerical errors for reducing ops.
                 assert_close(x_data, data)
             else:
                 assert x_data == data
@@ -269,7 +260,6 @@ def make_einsum_example(equation, fill=None, sizes=(2, 3)):
         shape = tuple(sizes[dim] for dim in dims)
         x = randn(shape)
         operand = x if fill is None else (x - x + fill)
-        # no need to use pyro_dims for numpy backend
         if not isinstance(operand, np.ndarray):
             operand._pyro_dims = dims
         operands.append(operand)
@@ -304,7 +294,6 @@ def rand(*args):
 
         return torch.rand(shape)
     else:
-        # work around numpy random returns float object instead of np.ndarray object when shape == ()
         return np.array(np.random.rand(*shape))
 
 
@@ -331,7 +320,6 @@ def randn(*args):
 
         return torch.randn(shape)
     else:
-        # work around numpy random returns float object instead of np.ndarray object when shape == ()
         return np.array(np.random.randn(*shape))
 
 
@@ -513,14 +501,6 @@ def iter_subsets(iterable, *, min_size=None, max_size=None):
 
 
 class DesugarGetitem:
-    """
-    Helper to desugar ``.__getitem__()`` syntax.
-
-    Example::
-
-        >>> desugar_getitem[1:3, ..., None]
-        (slice(1, 3), Ellipsis, None)
-    """
 
     def __getitem__(self, index):
         return index

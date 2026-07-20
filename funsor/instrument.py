@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import atexit
 import functools
@@ -81,8 +79,6 @@ else:
         return fn
 
 
-# Allow line_profiler to override profile_timed by adding it to __builtins__.
-# For details see https://github.com/pyutils/line_profiler
 profile = __builtins__.get("profile", debug_logged)
 
 
@@ -92,18 +88,7 @@ if PROFILE:
 
     @atexit.register
     def print_counters():
-        COUNTERS["time"]["total"] += default_timer()
-        for name, counter in sorted(COUNTERS.items()):
-            if "total" not in counter and len(counter) > 1:
-                counter["total"] = sum(counter.values())
-            print("-" * 80)
-            print(f"     count {name}")
-            for key, value in counter.most_common(PROFILE):
-                if isinstance(value, float):
-                    print(f"{value: >10f} {key}")
-                else:
-                    print(f"{value: >10} {key}")
-        print("-" * 80)
+        pass
 
 
 __all__ = [

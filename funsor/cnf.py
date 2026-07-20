@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import functools
 import itertools
@@ -36,14 +34,6 @@ from funsor.util import broadcast_shape, get_backend, quote
 
 
 class Contraction(Funsor):
-    """
-    Declarative representation of a finitary sum-product operation.
-
-    After normalization via the :func:`~funsor.terms.normalize` interpretation
-    contractions will canonically order their terms by type::
-
-        Delta, Number, Tensor, Gaussian
-    """
 
     def __init__(self, red_op, bin_op, reduced_vars, terms):
         terms = (terms,) if isinstance(terms, Funsor) else terms
@@ -103,102 +93,7 @@ class Contraction(Funsor):
         return super().__str__()
 
     def _sample(self, sampled_vars, sample_inputs, rng_key):
-        sampled_vars = sampled_vars.intersection(self.inputs)
-        if not sampled_vars:
-            return self
-        for term in self.terms:
-            if isinstance(term, Delta):
-                sampled_vars -= term.fresh
-        if not sampled_vars:
-            return self
-
-        if self.red_op in (ops.null, ops.logaddexp):
-            if rng_key is not None and get_backend() == "jax":
-                import jax
-
-                rng_keys = jax.random.split(rng_key, len(self.terms))
-            else:
-                rng_keys = [None] * len(self.terms)
-
-            if self.bin_op in (ops.null, ops.logaddexp):
-                # Design choice: we sample over logaddexp reductions, but leave
-                # logaddexp binary choices symbolic.
-                terms = [
-                    term._sample(
-                        sampled_vars.intersection(term.inputs), sample_inputs, rng_key
-                    )
-                    for term, rng_key in zip(self.terms, rng_keys)
-                ]
-                return Contraction(self.red_op, self.bin_op, self.reduced_vars, *terms)
-
-            if self.bin_op is ops.add:
-                # Sample variables greedily in order of the terms in which they appear.
-                for term in self.terms:
-                    greedy_vars = sampled_vars.intersection(term.inputs)
-                    if greedy_vars:
-                        break
-                assert greedy_vars
-                greedy_terms, terms = [], []
-                for term in self.terms:
-                    if greedy_vars.isdisjoint(term.inputs):
-                        terms.append(term)
-                    elif isinstance(term, Delta) and greedy_vars.isdisjoint(term.fresh):
-                        terms.append(term)
-                    else:
-                        greedy_terms.append(term)
-                if len(greedy_terms) == 1:
-                    term = greedy_terms[0]
-                    terms.append(term._sample(greedy_vars, sample_inputs, rng_keys[0]))
-                    result = Contraction(
-                        self.red_op, self.bin_op, self.reduced_vars, *terms
-                    )
-                elif (
-                    len(greedy_terms) == 2
-                    and isinstance(greedy_terms[0], Tensor)
-                    and isinstance(greedy_terms[1], Gaussian)
-                ):
-                    discrete, gaussian = greedy_terms
-                    term = discrete + gaussian.log_normalizer
-                    terms.append(gaussian)
-                    terms.append(-gaussian.log_normalizer)
-                    terms.append(term._sample(greedy_vars, sample_inputs, rng_keys[0]))
-                    result = Contraction(
-                        self.red_op, self.bin_op, self.reduced_vars, *terms
-                    )
-                elif any(
-                    isinstance(term, funsor.distribution.Distribution)
-                    and not greedy_vars.isdisjoint(term.value.inputs)
-                    for term in greedy_terms
-                ):
-                    sampled_terms = [
-                        term._sample(
-                            greedy_vars.intersection(term.value.inputs),
-                            sample_inputs,
-                            rng_key,
-                        )
-                        for term, rng_key in zip(greedy_terms, rng_keys)
-                        if isinstance(term, funsor.distribution.Distribution)
-                        and not greedy_vars.isdisjoint(term.value.inputs)
-                    ]
-                    result = Contraction(
-                        self.red_op,
-                        self.bin_op,
-                        self.reduced_vars,
-                        *(terms + sampled_terms)
-                    )
-                else:
-                    raise NotImplementedError(
-                        "Unhandled case: {}".format(
-                            ", ".join(str(type(t)) for t in greedy_terms)
-                        )
-                    )
-                return result._sample(
-                    sampled_vars - greedy_vars, sample_inputs, rng_keys[1]
-                )
-
-        raise TypeError(
-            "Cannot sample through ops ({}, {})".format(self.red_op, self.bin_op)
-        )
+        pass
 
     def align(self, names):
         assert isinstance(names, tuple)
@@ -233,172 +128,65 @@ GaussianMixture = Contraction[
 
 @quote.register(Contraction)
 def _(arg, indent, out):
-    line = "{}({}, {},".format(type(arg).__name__, repr(arg.red_op), repr(arg.bin_op))
-    out.append((indent, line))
-    quote.inplace(arg.reduced_vars, indent + 1, out)
-    i, line = out[-1]
-    out[-1] = i, line + ","
-    quote.inplace(arg.terms, indent + 1, out)
-    i, line = out[-1]
-    out[-1] = i, line + ")"
+    pass
 
 
 @children.register(Contraction)
 def children_contraction(x):
-    return (x.red_op, x.bin_op, x.reduced_vars) + x.terms
+    pass
 
 
 @children.register(Contraction)
 def children_contraction(x):
-    return (x.red_op, x.bin_op, x.reduced_vars) + x.terms
+    pass
 
 
 @eager.register(Contraction, AssociativeOp, AssociativeOp, frozenset, Variadic[Funsor])
 def eager_contraction_generic_to_tuple(red_op, bin_op, reduced_vars, *terms):
-    return eager.interpret(Contraction, red_op, bin_op, reduced_vars, terms)
+    pass
 
 
 @eager.register(Contraction, AssociativeOp, AssociativeOp, frozenset, tuple)
 def eager_contraction_generic_recursive(red_op, bin_op, reduced_vars, terms):
-    # Count the number of terms in which each variable is reduced.
-    counts = Counter()
-    for term in terms:
-        counts.update(reduced_vars & term.input_vars)
-
-    # push down leaf reductions
-    terms = list(terms)
-    leaf_reduced = False
-    reduced_once = frozenset(v for v, count in counts.items() if count == 1)
-    if reduced_once:
-        for i, term in enumerate(terms):
-            unique_vars = reduced_once & term.input_vars
-            if unique_vars:
-                result = term.reduce(red_op, unique_vars)
-                if result is not normalize.interpret(
-                    Contraction, red_op, ops.null, unique_vars, (term,)
-                ):
-                    terms[i] = result
-                    reduced_vars -= unique_vars
-                    leaf_reduced = True
-    if leaf_reduced:
-        return Contraction(red_op, bin_op, reduced_vars, *terms)
-
-    # exploit associativity to recursively evaluate this contraction
-    # a bit expensive, but handles interpreter-imposed directionality constraints
-    terms = tuple(terms)
-    reduced_twice = frozenset(v for v, count in counts.items() if count == 2)
-    for i, lhs in enumerate(terms[0:-1]):
-        for j_, rhs in enumerate(terms[i + 1 :]):
-            j = i + j_ + 1
-            unique_vars = reduced_twice.intersection(lhs.input_vars, rhs.input_vars)
-            result = Contraction(red_op, bin_op, unique_vars, lhs, rhs)
-            if result is not normalize.interpret(
-                Contraction, red_op, bin_op, unique_vars, (lhs, rhs)
-            ):  # did we make progress?
-                # pick the first evaluable pair
-                reduced_vars -= unique_vars
-                new_terms = terms[:i] + (result,) + terms[i + 1 : j] + terms[j + 1 :]
-                return Contraction(red_op, bin_op, reduced_vars, *new_terms)
-
-    return None
+    pass
 
 
 @eager.register(Contraction, AssociativeOp, AssociativeOp, frozenset, Funsor)
 def eager_contraction_to_reduce(red_op, bin_op, reduced_vars, term):
-    args = red_op, term, reduced_vars
-    return eager.dispatch(Reduce, *args)(*args)
+    pass
 
 
 @eager.register(Contraction, AssociativeOp, AssociativeOp, frozenset, Funsor, Funsor)
 def eager_contraction_to_binary(red_op, bin_op, reduced_vars, lhs, rhs):
-    if not reduced_vars.issubset(lhs.input_vars & rhs.input_vars):
-        args = red_op, bin_op, reduced_vars, (lhs, rhs)
-        result = eager.dispatch(Contraction, *args)(*args)
-        if result is not None:
-            return result
-
-    args = bin_op, lhs, rhs
-    result = eager.dispatch(Binary, *args)(*args)
-    if result is not None and reduced_vars:
-        result = eager.interpret(Reduce, red_op, result, reduced_vars)
-    return result
+    pass
 
 
 @eager.register(Contraction, ops.AddOp, ops.MulOp, frozenset, Tensor, Tensor)
 def eager_contraction_tensor(red_op, bin_op, reduced_vars, *terms):
-    if not all(term.dtype == "real" for term in terms):
-        raise NotImplementedError("TODO")
-    backend = BACKEND_TO_EINSUM_BACKEND[get_backend()]
-    return _eager_contract_tensors(reduced_vars, terms, backend=backend)
+    pass
 
 
 @eager.register(Contraction, ops.LogaddexpOp, ops.AddOp, frozenset, Tensor, Tensor)
 def eager_contraction_tensor(red_op, bin_op, reduced_vars, *terms):
-    if not all(term.dtype == "real" for term in terms):
-        raise NotImplementedError("TODO")
-    backend = BACKEND_TO_LOGSUMEXP_BACKEND[get_backend()]
-    return _eager_contract_tensors(reduced_vars, terms, backend=backend)
+    pass
 
 
-# TODO Consider using this for more than binary contractions.
 def _eager_contract_tensors(reduced_vars, terms, backend):
-    iter_symbols = map(opt_einsum.get_symbol, itertools.count())
-    symbols = defaultdict(functools.partial(next, iter_symbols))
-
-    inputs = OrderedDict()
-    einsum_inputs = []
-    operands = []
-    for term in terms:
-        inputs.update(term.inputs)
-        einsum_inputs.append(
-            "".join(symbols[k] for k in term.inputs)
-            + "".join(
-                symbols[i - len(term.shape)]
-                for i, size in enumerate(term.shape)
-                if size != 1
-            )
-        )
-
-        # Squeeze absent event dims to be compatible with einsum.
-        data = term.data
-        batch_shape = data.shape[: len(data.shape) - len(term.shape)]
-        event_shape = tuple(size for size in term.shape if size != 1)
-        data = data.reshape(batch_shape + event_shape)
-        operands.append(data)
-
-    for var in reduced_vars:
-        inputs.pop(var.name, None)
-    batch_shape = tuple(v.size for v in inputs.values())
-    event_shape = broadcast_shape(*(term.shape for term in terms))
-    einsum_output = "".join(symbols[k] for k in inputs) + "".join(
-        symbols[dim] for dim in range(-len(event_shape), 0) if dim in symbols
-    )
-    equation = ",".join(einsum_inputs) + "->" + einsum_output
-    data = opt_einsum.contract(equation, *operands, backend=backend)
-    data = data.reshape(batch_shape + event_shape)
-    return Tensor(data, inputs)
+    pass
 
 
-# TODO(https://github.com/pyro-ppl/funsor/issues/238) Use a port of
-# Pyro's gaussian_tensordot() here. Until then we must eagerly add the
-# possibly-rank-deficient terms before reducing to avoid Cholesky errors.
 @eager.register(
     Contraction, ops.LogaddexpOp, ops.AddOp, frozenset, GaussianMixture, GaussianMixture
 )
 def eager_contraction_gaussian(red_op, bin_op, reduced_vars, x, y):
-    return (x + y).reduce(red_op, reduced_vars)
+    pass
 
 
 @affine_inputs.register(Contraction)
 def _(fn):
-    with reflect:
-        flat = reduce(fn.bin_op, fn.terms).reduce(fn.red_op, fn.reduced_vars)
-    return affine_inputs(flat)
+    pass
 
 
-##########################################
-# Normalizing Contractions
-##########################################
 
 ORDERING = {Delta: 1, Number: 2, Tensor: 3, Gaussian: 4, Unary[ops.NegOp, Gaussian]: 5}
 GROUND_TERMS = tuple(ORDERING)
@@ -410,115 +198,50 @@ GROUND_TERMS = tuple(ORDERING)
 def normalize_contraction_commutative_canonical_order(
     red_op, bin_op, reduced_vars, *terms
 ):
-    # when bin_op is commutative, put terms into a canonical order for pattern matching
-    new_terms = tuple(
-        v
-        for i, v in sorted(
-            enumerate(terms),
-            key=lambda t: (ORDERING.get(type(t[1]).__origin__, -1), t[0]),
-        )
-    )
-    if any(v is not vv for v, vv in zip(terms, new_terms)):
-        return Contraction(red_op, bin_op, reduced_vars, *new_terms)
-    return normalize.interpret(Contraction, red_op, bin_op, reduced_vars, new_terms)
+    pass
 
 
 @normalize.register(
     Contraction, AssociativeOp, ops.AddOp, frozenset, GaussianMixture, GROUND_TERMS
 )
 def normalize_contraction_commute_joint(red_op, bin_op, reduced_vars, mixture, other):
-    return Contraction(
-        mixture.red_op if red_op is ops.null else red_op,
-        bin_op,
-        reduced_vars | mixture.reduced_vars,
-        *(mixture.terms + (other,))
-    )
+    pass
 
 
 @normalize.register(
     Contraction, AssociativeOp, ops.AddOp, frozenset, GROUND_TERMS, GaussianMixture
 )
 def normalize_contraction_commute_joint(red_op, bin_op, reduced_vars, other, mixture):
-    return Contraction(
-        mixture.red_op if red_op is ops.null else red_op,
-        bin_op,
-        reduced_vars | mixture.reduced_vars,
-        *(mixture.terms + (other,))
-    )
+    pass
 
 
 @normalize.register(
     Contraction, AssociativeOp, AssociativeOp, frozenset, Variadic[Funsor]
 )
 def normalize_contraction_generic_args(red_op, bin_op, reduced_vars, *terms):
-    return normalize.interpret(Contraction, red_op, bin_op, reduced_vars, tuple(terms))
+    pass
 
 
 @normalize.register(Contraction, NullOp, NullOp, frozenset, Funsor)
 def normalize_trivial(red_op, bin_op, reduced_vars, term):
-    assert not reduced_vars
-    return term
+    pass
 
 
 @normalize.register(Contraction, AssociativeOp, AssociativeOp, frozenset, tuple)
 def normalize_contraction_generic_tuple(red_op, bin_op, reduced_vars, terms):
-    if not reduced_vars and red_op is not ops.null:
-        return Contraction(ops.null, bin_op, reduced_vars, *terms)
-
-    if len(terms) == 1 and bin_op is not ops.null:
-        return Contraction(red_op, ops.null, reduced_vars, *terms)
-
-    if red_op is ops.null and bin_op is ops.null:
-        return terms[0]
-
-    if red_op is bin_op:
-        new_terms = tuple(v.reduce(red_op, reduced_vars) for v in terms)
-        return Contraction(red_op, bin_op, frozenset(), *new_terms)
-
-    if bin_op in ops.UNITS and any(
-        isinstance(t, Number) and t.data == ops.UNITS[bin_op] for t in terms
-    ):
-        new_terms = tuple(
-            t
-            for t in terms
-            if not (isinstance(t, Number) and t.data == ops.UNITS[bin_op])
-        )
-        if not new_terms:  # everything was a unit
-            new_terms = (terms[0],)
-        return Contraction(red_op, bin_op, reduced_vars, *new_terms)
-
-    for i, v in enumerate(terms):
-        if not isinstance(v, Contraction):
-            continue
-
-        # fuse operations without distributing
-        if (v.red_op is ops.null and bin_op is v.bin_op) or (
-            bin_op is ops.null and v.red_op in (red_op, ops.null)
-        ):
-            red_op = v.red_op if red_op is ops.null else red_op
-            bin_op = v.bin_op if bin_op is ops.null else bin_op
-            new_terms = terms[:i] + v.terms + terms[i + 1 :]
-            return Contraction(
-                red_op, bin_op, reduced_vars | v.reduced_vars, *new_terms
-            )
-
-    # nothing more to do, reflect
-    return None
+    pass
 
 
-#########################################
-# Creating Contractions from other terms
-#########################################
 
 
 @normalize.register(Binary, AssociativeOp, Funsor, Funsor)
 def binary_to_contract(op, lhs, rhs):
-    return Contraction(ops.null, op, frozenset(), lhs, rhs)
+    pass
 
 
 @normalize.register(Reduce, AssociativeOp, Funsor, frozenset)
 def reduce_funsor(op, arg, reduced_vars):
-    return Contraction(op, ops.null, reduced_vars, arg)
+    pass
 
 
 @normalize.register(
@@ -527,54 +250,34 @@ def reduce_funsor(op, arg, reduced_vars):
     (Variable, Contraction[ops.AssociativeOp, ops.MulOp, frozenset, tuple]),
 )
 def unary_neg_variable(op, arg):
-    return arg * -1
+    pass
 
 
-#######################################################################
-# Distributing Unary transformations (Subs, log, exp, neg, reciprocal)
-#######################################################################
 
 
 @normalize.register(Subs, Funsor, tuple)
 def do_fresh_subs(arg, subs):
-    if not subs:
-        return arg
-    if all(name in arg.fresh for name, sub in subs):
-        return arg.eager_subs(subs)
-    return None
+    pass
 
 
 @normalize.register(Subs, Contraction, tuple)
 def distribute_subs_contraction(arg, subs):
-    new_terms = tuple(
-        (
-            Subs(v, tuple((name, sub) for name, sub in subs if name in v.inputs))
-            if any(name in v.inputs for name, sub in subs)
-            else v
-        )
-        for v in arg.terms
-    )
-    return Contraction(arg.red_op, arg.bin_op, arg.reduced_vars, *new_terms)
+    pass
 
 
 @normalize.register(Subs, Subs, tuple)
 def normalize_fuse_subs(arg, subs):
-    # a(b)(c) -> a(b(c), c)
-    arg_subs = (
-        tuple(arg.subs.items()) if isinstance(arg.subs, OrderedDict) else arg.subs
-    )
-    new_subs = subs + tuple((k, Subs(v, subs)) for k, v in arg_subs)
-    return Subs(arg.arg, new_subs)
+    pass
 
 
 @normalize.register(Binary, ops.SubOp, Funsor, Funsor)
 def binary_subtract(op, lhs, rhs):
-    return lhs + -rhs
+    pass
 
 
 @normalize.register(Binary, ops.TruedivOp, Funsor, Funsor)
 def binary_divide(op, lhs, rhs):
-    return lhs * Unary(ops.reciprocal, rhs)
+    pass
 
 
 @normalize.register(Unary, ops.ExpOp, Unary[ops.LogOp, Funsor])
@@ -582,7 +285,7 @@ def binary_divide(op, lhs, rhs):
 @normalize.register(Unary, ops.NegOp, Unary[ops.NegOp, Funsor])
 @normalize.register(Unary, ops.ReciprocalOp, Unary[ops.ReciprocalOp, Funsor])
 def unary_log_exp(op, arg):
-    return arg.arg
+    pass
 
 
 @normalize.register(
@@ -590,9 +293,7 @@ def unary_log_exp(op, arg):
 )
 @normalize.register(Unary, ops.NegOp, Contraction[NullOp, ops.AddOp, frozenset, tuple])
 def unary_contract(op, arg):
-    return Contraction(
-        arg.red_op, arg.bin_op, arg.reduced_vars, *(op(t) for t in arg.terms)
-    )
+    pass
 
 
 BACKEND_TO_EINSUM_BACKEND = {
@@ -600,8 +301,6 @@ BACKEND_TO_EINSUM_BACKEND = {
     "torch": "torch",
     "jax": "jax.numpy",
 }
-# NB: numpy_log, numpy_map is backend-agnostic so they also work for torch backend;
-# however, we might need to profile to make a switch
 BACKEND_TO_LOGSUMEXP_BACKEND = {
     "numpy": "funsor.einsum.numpy_log",
     "torch": "pyro.ops.einsum.torch_log",

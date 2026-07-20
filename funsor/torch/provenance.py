@@ -1,15 +1,8 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import torch
 
 
 class ProvenanceTensor(torch.Tensor):
-    """
-    Provenance tracking implementation in Pytorch.
-
-    Provenance of the output tensor is the union of provenances of input tensors.
-    """
 
     def __new__(cls, data, provenance=frozenset(), **kwargs):
         if not provenance:
@@ -31,9 +24,7 @@ class ProvenanceTensor(torch.Tensor):
     def __torch_function__(cls, func, types, args=(), kwargs=None):
         if kwargs is None:
             kwargs = {}
-        # collect provenance information from args
         provenance = frozenset()
-        # extract ProvenanceTensor._t data from args
         _args = []
         for arg in args:
             if isinstance(arg, ProvenanceTensor):

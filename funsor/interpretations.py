@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from abc import ABC, abstractmethod
 from collections.abc import Hashable
@@ -13,13 +11,6 @@ from .util import get_backend
 
 
 class Interpretation(ContextDecorator, ABC):
-    """
-    Abstract base class for Funsor interpretations.
-
-    Instances may be used as context managers or decorators.
-
-    :param str name: A name used for printing and debugging (required).
-    """
 
     def __init__(self, name):
         self.__name__ = name
@@ -31,8 +22,6 @@ class Interpretation(ContextDecorator, ABC):
     is_total = False
 
     def __enter__(self):
-        # TODO consider requiring totality:
-        # assert self.is_total
         new = self
         if not self.is_total:
             new = PrioritizedInterpretation(new, get_interpretation())
@@ -44,7 +33,7 @@ class Interpretation(ContextDecorator, ABC):
 
     @property
     def subinterpretations(self):
-        return (self,)
+        pass
 
     @abstractmethod
     def interpret(self, cls, *args):
@@ -54,7 +43,6 @@ class Interpretation(ContextDecorator, ABC):
     def make_hash_key(cls, *args):
         backend = get_backend()
         if backend == "torch":
-            # Avoid "ImportError: sys.meta_path is None" on shutdown.
             from torch import Tensor
 
             return tuple(
@@ -69,17 +57,6 @@ class Interpretation(ContextDecorator, ABC):
 
 
 class CallableInterpretation(Interpretation):
-    """
-    A simple callable interpretation.
-
-    Example usage::
-
-        @CallableInterpretation
-        def my_interpretation(cls, *args):
-            return ...
-
-    :param callable interpret: A function implementing interpretation.
-    """
 
     def __init__(self, interpret):
         assert callable(interpret)
@@ -87,34 +64,13 @@ class CallableInterpretation(Interpretation):
         self.interpret = interpret
 
     def set_callable(self, interpret):
-        """
-        Resets the callable ``.interpret`` attribute.
-        """
-        assert callable(interpret)
-        self.interpret = interpret
-        return self
+        pass
 
     def interpret(self, cls, *args):
         raise ValueError("interpret has not been defined")
 
 
 class DispatchedInterpretation(Interpretation):
-    """
-    An interpretation based on pattern matching.
-
-    Example usage::
-
-        my_interpretation = DispatchedInterpretation("my_interpretation")
-
-        # Register a funsor pattern and rule.
-        @my_interpretation.register(...)
-        def my_impl(cls, *args):
-            ...
-
-        # Use the new interpretation.
-        with my_interpretation:
-            ...
-    """
 
     def __init__(self, name="dispatched"):
         super().__init__(name)
@@ -131,13 +87,7 @@ class DispatchedInterpretation(Interpretation):
             COUNTERS = instrument.COUNTERS
 
             def profiled_dispatch(*args):
-                name = self.__name__ + ".dispatch"
-                start = default_timer()
-                result = registry.dispatch(*args)
-                COUNTERS["time"][name] += default_timer() - start
-                COUNTERS["call"][name] += 1
-                COUNTERS["interpretation"][self.__name__] += 1
-                return result
+                pass
 
             self.dispatch = profiled_dispatch
         else:
@@ -148,14 +98,6 @@ class DispatchedInterpretation(Interpretation):
 
 
 class PrioritizedInterpretation(Interpretation):
-    r"""
-    A prioritized sequence of subinterpretations.
-
-    To interpret ``cls(*args)``, each subinterpretation is tried until one returns
-    a value other than None.
-
-    :param \*subinterpretations: A sequence of :class:`Interpretation` s.
-    """
 
     def __init__(self, *subinterpretations):
         subinterpretations = tuple(
@@ -169,11 +111,11 @@ class PrioritizedInterpretation(Interpretation):
 
     @property
     def subinterpretations(self):
-        return self._subinterpretations
+        pass
 
     @property
     def is_total(self):
-        return any(s.is_total for s in self._subinterpretations)
+        pass
 
     @property
     def register(self):
@@ -199,13 +141,7 @@ class StatefulInterpretationMeta(type(ABC)):
             COUNTERS = instrument.COUNTERS
 
             def profiled_dispatch(*args):
-                name = cls.__name__ + ".dispatch"
-                start = default_timer()
-                result = cls.registry.dispatch(*args)
-                COUNTERS["time"][name] += default_timer() - start
-                COUNTERS["call"][name] += 1
-                COUNTERS["interpretation"][cls.__name__] += 1
-                return result
+                pass
 
             cls.dispatch = staticmethod(profiled_dispatch)
         else:
@@ -213,24 +149,6 @@ class StatefulInterpretationMeta(type(ABC)):
 
 
 class StatefulInterpretation(Interpretation, metaclass=StatefulInterpretationMeta):
-    """
-    Base class for interpretations with instance-dependent state or parameters.
-
-    Example usage::
-
-        class MyInterpretation(StatefulInterpretation):
-
-            def __init__(self, my_param):
-                self.my_param = my_param
-
-        @MyInterpretation.register(...)
-        def my_impl(interpretation_state, cls, *args):
-            my_param = interpretation_state.my_param
-            ...
-
-        with MyInterpretation(my_param=0.1):
-            ...
-    """
 
     def __init__(self, name="stateful"):
         super().__init__(name)
@@ -252,13 +170,6 @@ class StatefulInterpretation(Interpretation, metaclass=StatefulInterpretationMet
 
 
 class Memoize(Interpretation):
-    """
-    Exploits cons-hashing to do implicit common subexpression elimination.
-
-    :param Interpretation base_interpretation: The interpretation to memoize.
-    :param dict cache: An optional temporary cache where results will be
-        memoized.
-    """
 
     def __init__(self, base_interpretation, cache=None):
         super().__init__(f"Memoize({base_interpretation.__name__})")
@@ -271,7 +182,7 @@ class Memoize(Interpretation):
 
     @property
     def is_total(self):
-        return self.base_interpretation.is_total
+        pass
 
     def interpret(self, cls, *args):
         key = self.make_hash_key(cls, *args)
@@ -291,8 +202,6 @@ def memoize(cache=None):
         yield interp.cache
 
 
-################################################################################
-# Concrete interpretations.
 
 
 @CallableInterpretation
@@ -325,7 +234,6 @@ die = DispatchedInterpretation("die")
 eager_or_die = PrioritizedInterpretation(eager_base, die, reflect)
 
 sequential_base = DispatchedInterpretation("sequential")
-# XXX does this work with sphinx/help()?
 sequential = PrioritizedInterpretation(
     sequential_base, eager_base, normalize_base, reflect
 )

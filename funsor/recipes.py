@@ -1,12 +1,4 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
-"""
-Recipes using Funsor
---------------------
-This module provides a number of high-level algorithms using Funsor.
-
-"""
 
 from typing import Dict, FrozenSet
 
@@ -49,7 +41,6 @@ def forward_filter_backward_rsample(
     assert all(isinstance(k, str) for k in sample_inputs)
     assert all(isinstance(v, funsor.domains.Domain) for v in sample_inputs.values())
 
-    # Perform tensor variable elimination.
     with funsor.interpretations.reflect:
         log_Z = funsor.sum_product.sum_product(
             funsor.ops.logaddexp,
@@ -65,14 +56,12 @@ def forward_filter_backward_rsample(
             funsor.ops.logaddexp, funsor.ops.add, log_Z, batch_vars=batch_vars
         )
 
-    # Extract sample tensors.
     samples = {}
     for name, factor in factors.items():
         if name in eliminate:
             samples.update(funsor.montecarlo.extract_samples(marginals[factor]))
     assert frozenset(samples) == eliminate - plates
 
-    # Compute log density at each sample.
     log_prob = -log_Z
     for f in factors.values():
         term = f(**samples)
@@ -119,7 +108,6 @@ def forward_filter_backward_precondition(
     assert isinstance(aux_name, str)
     assert not any(aux_name in f.inputs for f in factors.values())
 
-    # Perform tensor variable elimination.
     with funsor.interpretations.reflect:
         log_Z = funsor.sum_product.sum_product(
             funsor.ops.logaddexp,
@@ -137,18 +125,15 @@ def forward_filter_backward_precondition(
             batch_vars=precondition.sample_vars,
         )
 
-    # Extract sample tensors.
     samples = {}
     for name, factor in factors.items():
         if name in eliminate:
             samples.update(funsor.montecarlo.extract_samples(marginals[factor]))
     assert frozenset(samples) == eliminate - plates
 
-    # Combine into a single auxiliary variable.
     subs = precondition.combine_subs()
     samples = {k: v(**subs) for k, v in samples.items()}
 
-    # Compute log density at each sample, lazily dependent on aux_name.
     log_prob = -log_Z
     for f in factors.values():
         term = f(**samples)

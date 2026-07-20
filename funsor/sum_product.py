@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import re
 from collections import OrderedDict, defaultdict
@@ -29,7 +27,6 @@ from funsor.util import quote
 
 
 def _partition(terms, sum_vars):
-    # Construct a bipartite graph between terms and the vars
     neighbors = OrderedDict([(t, []) for t in terms])
     for term in terms:
         for dim in term.inputs.keys():
@@ -37,7 +34,6 @@ def _partition(terms, sum_vars):
                 neighbors[term].append(dim)
                 neighbors.setdefault(dim, []).append(term)
 
-    # Partition the bipartite graph into connected components for contraction.
     components = []
     while neighbors:
         v, pending = neighbors.popitem()
@@ -51,7 +47,6 @@ def _partition(terms, sum_vars):
                     component[v] = None
                     pending.append(v)
 
-        # Split this connected component into tensors and dims.
         component_terms = tuple(v for v in component if isinstance(v, Funsor))
         if component_terms:
             component_dims = frozenset(
@@ -62,21 +57,16 @@ def _partition(terms, sum_vars):
 
 
 def _unroll_plate(factors, var_to_ordinal, sum_vars, plate, step):
-    # size of the plate
     size = next(iter(f.inputs[plate].size for f in factors if plate in f.inputs))
-    # history of the plate
     history = 1 if step else 0
 
-    # replicated variables
     plate_vars = set()
     for var, ordinal in var_to_ordinal.items():
         if plate in ordinal:
             plate_vars.add(var)
 
-    # make sure that all vars in the plate are being unrolled
     assert plate_vars.issubset(sum_vars)
 
-    # unroll variables
     for var in plate_vars:
         sum_vars -= frozenset({var})
         if var in step.keys():
@@ -94,7 +84,6 @@ def _unroll_plate(factors, var_to_ordinal, sum_vars, plate, step):
         new_ordinal = ordinal.difference({plate})
         var_to_ordinal.update({v: new_ordinal for v in new_var})
 
-    # unroll factors
     unrolled_factors = []
     for factor in factors:
         if plate in factor.inputs:
@@ -164,10 +153,8 @@ def partial_unroll(factors, eliminate=frozenset(), plate_to_step=dict()):
         if step
         for chain in step
     )
-    # process plate_to_step
     plate_to_step = plate_to_step.copy()
     for key, step in plate_to_step.items():
-        # make a dict step e.g. {"x_prev": "x_curr"}; specific to history = 1
         plate_to_step[key] = {s[1]: s[2] for s in step}
 
     plates = frozenset(plate_to_step.keys())
@@ -181,8 +168,6 @@ def partial_unroll(factors, eliminate=frozenset(), plate_to_step=dict()):
         for var in set(f.inputs) - plates:
             var_to_ordinal[var] = var_to_ordinal.get(var, ordinal) & ordinal
 
-    # first unroll plates with history=1 and highest ordinal
-    # then unroll plates with history=0
     plate_to_order = {}
     for plate, step in unrolled_plates.items():
         if step:
@@ -190,7 +175,6 @@ def partial_unroll(factors, eliminate=frozenset(), plate_to_step=dict()):
         else:
             plate_to_order[plate] = 0
 
-    # unroll one plate at a time
     for plate in sorted(
         unrolled_plates.keys(), key=lambda p: plate_to_order[p], reverse=True
     ):
@@ -283,7 +267,6 @@ def partial_sum_product(
                     *(var_to_ordinal[v] for v in remaining_sum_vars)
                 )
                 if new_plates == leaf:
-                    # Choose the smallest plate to eliminate.
                     plate = min(
                         (f.inputs[plate].size, plate) for plate in leaf & eliminate
                     )[-1]
@@ -303,8 +286,6 @@ def partial_sum_product(
                             sum_vars = sum_vars - {v} | {v_.name}
                             eliminate = eliminate - {v} | {v_.name}
                             subs[v] = v_[plate]
-                    # This will only work for terms implementing substituting
-                    # {var1: ops.getitem(var2, var3)}, e.g. Gaussian but not Tensor.
                     f = f(**subs)
                     for o, gs in list(ordinal_to_factors.items()):
                         if plate not in o:
@@ -373,21 +354,12 @@ def dynamic_partial_sum_product(
     assert all(isinstance(f, Funsor) for f in factors)
     assert isinstance(eliminate, frozenset)
     assert isinstance(plate_to_step, dict)
-    # process plate_to_step
     plate_to_step = plate_to_step.copy()
     prev_to_init = {}
     markov_to_sarkka = {}
     markov_sum_vars = set()
     for key, step in plate_to_step.items():
         for chain in step:
-            # map old markov step names to sarkka_bilmes format step names
-            # Case 1
-            # x_slice(0, 5, None) -> _PREV__PREV_x_slice(2, 7, None)
-            # x_slice(1, 6, None) -> _PREV_x_slice(2, 7, None)
-            # x_slice(2, 7, None) -> x_slice(2, 7, None)
-            # Case 2
-            # x_prev - > _PREV_x_curr
-            # x_curr -> x_curr
             history = len(chain) // 2
             base_name = chain[-1]
             for t, name in enumerate(reversed(chain[history:-1])):
@@ -395,7 +367,6 @@ def dynamic_partial_sum_product(
             markov_sum_vars.add(base_name)
             markov_sum_vars.update(markov_to_sarkka)
 
-            # map prev to init; works for any history > 0
             init, prev = chain[: len(chain) // 2], chain[len(chain) // 2 : -1]
             prev = tuple(markov_to_sarkka[name] for name in prev)
             prev_to_init.update(zip(prev, init))
@@ -433,10 +404,8 @@ def dynamic_partial_sum_product(
         for group_factors, group_vars in _partition(
             leaf_factors, leaf_reduce_vars | markov_prod_vars
         ):
-            # eliminate non markov vars
             nonmarkov_vars = group_vars - markov_sum_vars - markov_prod_vars
             f = reduce(prod_op, group_factors).reduce(sum_op, nonmarkov_vars)
-            # eliminate markov vars
             markov_vars = group_vars.intersection(markov_sum_vars)
             if markov_vars:
                 markov_prod_var = [markov_sum_to_prod[var] for var in markov_vars]
@@ -448,8 +417,6 @@ def dynamic_partial_sum_product(
                     if time in var_to_ordinal[v] and var_to_ordinal[v] < leaf:
                         raise ValueError("intractable!")
                 time_var = Variable(time, f.inputs[time])
-                # markov_to_sarkka renames variables in MarkovProduct format
-                # to sarkka_bilmes_product format
                 base_names = markov_vars.intersection(
                     _shift_name(name, -_get_shift(name))
                     for name in markov_to_sarkka.values()
@@ -515,15 +482,12 @@ def modified_partial_sum_product(
     assert all(isinstance(f, Funsor) for f in factors)
     assert isinstance(eliminate, frozenset)
     assert isinstance(plate_to_step, dict)
-    # process plate_to_step
     plate_to_step = plate_to_step.copy()
     prev_to_init = {}
     for key, step in plate_to_step.items():
-        # map prev to init; works for any history > 0
         for chain in step:
             init, prev = chain[: len(chain) // 2], chain[len(chain) // 2 : -1]
             prev_to_init.update(zip(prev, init))
-        # convert step to dict type required for MarkovProduct
         plate_to_step[key] = {chain[1]: chain[2] for chain in step}
 
     plates = frozenset(plate_to_step.keys())
@@ -562,10 +526,8 @@ def modified_partial_sum_product(
         for group_factors, group_vars in _partition(
             leaf_factors, leaf_reduce_vars | markov_prod_vars
         ):
-            # eliminate non markov vars
             nonmarkov_vars = group_vars - markov_sum_vars - markov_prod_vars
             f = reduce(prod_op, group_factors).reduce(sum_op, nonmarkov_vars)
-            # eliminate markov vars
             markov_vars = group_vars.intersection(markov_sum_vars)
             if markov_vars:
                 markov_prod_var = [markov_sum_to_prod[var] for var in markov_vars]
@@ -727,7 +689,6 @@ def mixed_sequential_sum_product(sum_op, prod_op, trans, time, step, num_segment
     num_segments = duration if num_segments is None else num_segments
     assert num_segments > 0 and duration > 0
 
-    # handle unevenly sized segments by chopping off the final segment and calling mixed_sequential_sum_product again
     if duration % num_segments and duration - duration % num_segments > 0:
         remainder = trans(
             **{
@@ -757,13 +718,11 @@ def mixed_sequential_sum_product(sum_op, prod_op, trans, time, step, num_segment
         )
         return final_eliminated
 
-    # handle degenerate cases that reduce to a single stage
     if num_segments == 1:
         return naive_sequential_sum_product(sum_op, prod_op, trans, time_var, step)
     if num_segments >= duration:
         return sequential_sum_product(sum_op, prod_op, trans, time_var, step)
 
-    # break trans into num_segments segments of equal length
     segment_length = duration // num_segments
     segments = [
         trans(
@@ -881,8 +840,6 @@ def sarkka_bilmes_product(
             result = trans(**{time: remaining_duration - 1})
             remaining_duration -= 1
         else:
-            # chop off the rightmost set of complete chunks from trans,
-            # then recursively call sarkka_bilmes_product on truncated factor
             result = sarkka_bilmes_product(
                 sum_op,
                 prod_op,
@@ -892,7 +849,6 @@ def sarkka_bilmes_product(
                 num_periods,
             )
 
-        # sequentially combine remaining pieces with result
         for t in reversed(range(remaining_duration)):
             result = prod_op(
                 _shift_funsor(trans(**{time: t}), remaining_duration - t, global_vars),
@@ -938,9 +894,6 @@ def sarkka_bilmes_product(
 
 
 class MarkovProductMeta(FunsorMeta):
-    """
-    Wrapper to convert ``step`` to a tuple and fill in default ``step_names``.
-    """
 
     def __call__(cls, sum_op, prod_op, trans, time, step, step_names=None):
         if isinstance(time, str):
@@ -956,19 +909,6 @@ class MarkovProductMeta(FunsorMeta):
 
 
 class MarkovProduct(Funsor, metaclass=MarkovProductMeta):
-    """
-    Lazy representation of :func:`sequential_sum_product` .
-
-    :param AssociativeOp sum_op: A marginalization op.
-    :param AssociativeOp prod_op: A Bayesian fusion op.
-    :param Funsor trans: A sequence of transition factors,
-        usually varying along the ``time`` input.
-    :param time: A time dimension.
-    :type time: str or Variable
-    :param dict step: A str-to-str mapping of "previous" inputs of ``trans``
-        to "current" inputs of ``trans``.
-    :param dict step_names: Optional, for internal use by alpha conversion.
-    """
 
     def __init__(self, sum_op, prod_op, trans, time, step, step_names):
         assert isinstance(sum_op, AssociativeOp)
@@ -1017,48 +957,16 @@ class MarkovProduct(Funsor, metaclass=MarkovProductMeta):
         return self.sum_op, self.prod_op, trans, time, step, step_names
 
     def eager_subs(self, subs):
-        assert isinstance(subs, tuple)
-        # Eagerly rename variables.
-        rename = {k: v.name for k, v in subs if isinstance(v, Variable)}
-        if not rename:
-            return None
-        step_names = frozenset(
-            (k, rename.get(v, v)) for k, v in self.step_names.items()
-        )
-        result = MarkovProduct(
-            self.sum_op, self.prod_op, self.trans, self.time, self.step, step_names
-        )
-        lazy = tuple((k, v) for k, v in subs if not isinstance(v, Variable))
-        if lazy:
-            result = Subs(result, lazy)
-        return result
+        pass
 
 
 @quote.register(MarkovProduct)
 def _(arg, indent, out):
-    line = "{}({}, {},".format(type(arg).__name__, repr(arg.sum_op), repr(arg.prod_op))
-    out.append((indent, line))
-    for value in arg._ast_values[2:]:
-        quote.inplace(value, indent + 1, out)
-        i, line = out[-1]
-        out[-1] = i, line + ","
-    i, line = out[-1]
-    out[-1] = i, line[:-1] + ")"
+    pass
 
 
 @eager.register(
     MarkovProduct, AssociativeOp, AssociativeOp, Funsor, Variable, frozenset, frozenset
 )
 def eager_markov_product(sum_op, prod_op, trans, time, step, step_names):
-    if step:
-        result = sequential_sum_product(sum_op, prod_op, trans, time, dict(step))
-    elif time.name in trans.inputs:
-        result = trans.reduce(prod_op, time.name)
-    elif prod_op is ops.add:
-        result = trans * time.size
-    elif prod_op is ops.mul:
-        result = trans**time.size
-    else:
-        raise NotImplementedError("https://github.com/pyro-ppl/funsor/issues/233")
-
-    return Subs(result, step_names)
+    pass

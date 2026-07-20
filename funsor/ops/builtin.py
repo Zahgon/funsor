@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import math
 import operator
@@ -27,7 +25,6 @@ _builtin_pow = pow
 _builtin_sum = sum
 
 
-# FIXME Most code assumes this is an AssociativeCommutativeOp.
 class AssociativeOp(BinaryOp):
     pass
 
@@ -44,15 +41,10 @@ def null(x, y):
 
 @BinaryOp.make
 def getitem(lhs, rhs, offset=0):
-    if offset == 0:
-        return lhs[rhs]
-    return lhs[(slice(None),) * offset + (rhs,)]
+    pass
 
 
 class GetsliceMeta(OpMeta):
-    """
-    Works around slice objects not being hashable.
-    """
 
     def hash_args_kwargs(cls, args, kwargs):
         index = args[0] if args else kwargs["index"]
@@ -66,7 +58,7 @@ class GetsliceMeta(OpMeta):
 
 @UnaryOp.make(metaclass=GetsliceMeta)
 def getslice(x, index=Ellipsis):
-    return x[index]
+    pass
 
 
 getslice.supported_types = (type(None), type(Ellipsis), int, slice)
@@ -175,12 +167,12 @@ xor = AssociativeOp.make(operator.xor)
 
 @AssociativeOp.make
 def max(lhs, rhs):
-    return _builtin_max(lhs, rhs)
+    pass
 
 
 @AssociativeOp.make
 def min(lhs, rhs):
-    return _builtin_min(lhs, rhs)
+    pass
 
 
 lgamma = UnaryOp.make(math.lgamma)
@@ -190,14 +182,12 @@ sqrt = UnaryOp.make(math.sqrt)
 
 @UnaryOp.make
 def reciprocal(x):
-    if isinstance(x, Number):
-        return 1.0 / x
-    raise ValueError("No reciprocal for type {}".format(type(x)))
+    pass
 
 
 @UnaryOp.make
 def softplus(x):
-    return log(1.0 + exp(x))
+    pass
 
 
 @TransformOp.make
@@ -212,19 +202,17 @@ atanh = TransformOp.make(math.atanh)
 
 @TransformOp.make
 def sigmoid(x):
-    return 1 / (1 + exp(-x))
+    pass
 
 
 @sub.make
 def safesub(x, y):
-    if isinstance(y, Number):
-        return sub(x, y)
+    pass
 
 
 @truediv.make
 def safediv(x, y):
-    if isinstance(y, Number):
-        return operator.truediv(x, y)
+    pass
 
 
 @exp.set_log_abs_det_jacobian
@@ -245,22 +233,22 @@ atanh.set_inv(tanh)
 
 @tanh.set_log_abs_det_jacobian
 def tanh_log_abs_det_jacobian(x, y):
-    return 2.0 * (math.log(2.0) - x - softplus(-2.0 * x))
+    pass
 
 
 @atanh.set_log_abs_det_jacobian
 def atanh_log_abs_det_jacobian(x, y):
-    return -tanh.log_abs_det_jacobian(y, x)
+    pass
 
 
 @sigmoid.set_inv
 def sigmoid_inv(y):
-    return log(y) - log1p(-y)
+    pass
 
 
 @sigmoid.set_log_abs_det_jacobian
 def sigmoid_log_abs_det_jacobian(x, y):
-    return -softplus(-x) - softplus(x)
+    pass
 
 
 DISTRIBUTIVE_OPS.add((add, mul))

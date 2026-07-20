@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import ast
 import functools
@@ -48,53 +46,16 @@ class OpTransformer(ast.NodeTransformer):
         self.const = const
 
     def visit_Constant(self, node):
-        node = self.generic_visit(node)
-        var = self.const.get(node.value)
-        if var is not None:
-            node = ast.Name(id=var, ctx=ast.Load())
-        return node
+        pass
 
     def visit_UnaryOp(self, node):
-        node = self.generic_visit(node)
-        var = self.prefix.get(type(node.op))
-        if var is not None:
-            node = ast.Call(
-                func=ast.Name(id=var, ctx=ast.Load()), args=[node.operand], keywords=[]
-            )
-        return node
+        pass
 
     def visit_BinOp(self, node):
-        node = self.generic_visit(node)
-        var = self.infix.get(type(node.op))
-        if var is not None:
-            node = ast.Call(
-                func=ast.Name(id=var, ctx=ast.Load()),
-                args=[node.left, node.right],
-                keywords=[],
-            )
-        return node
+        pass
 
     def visit_Compare(self, node):
-        node = self.generic_visit(node)
-
-        # Restrict to the binary case.
-        assert len(node.ops) == len(node.comparitors)
-        if len(node.ops) > 1:
-            raise NotImplementedError(
-                "Please decompose stacked comparisons into conjunctions of "
-                "binary comparisons, e.g. 'x < y < z' as '(x < y) & (y < z)'"
-            )
-        node_op = node.ops[0]
-        node_right = node.comparitors[0]
-
-        var = self.infix.get(type(node_op))
-        if var is not None:
-            node = ast.Call(
-                func=ast.Name(id=var, ctx=ast.Load()),
-                args=[node.left, node_right],
-                keywords=[],
-            )
-        return node
+        pass
 
 
 def rewrite_ops(infix={}, prefix={}, const={}):
@@ -131,32 +92,7 @@ def rewrite_ops(infix={}, prefix={}, const={}):
     transformer = OpTransformer(infix, prefix, const)
 
     def decorator(fn):
-        source = inspect.getsource(fn)
-
-        # Strip indentation and all decorators.
-        indent = len(source) - len(source.lstrip())
-        lines = []
-        discard = True
-        for line in source.split("\n"):
-            line = line[indent:]
-            if discard:
-                if line.startswith("def "):
-                    discard = False
-                else:
-                    continue
-            lines.append(line)
-        source = "\n".join(lines)
-        assert source
-
-        # Transform the function.
-        a = ast.parse(source)
-        a_t = transformer.visit(a)
-        source_t = ast.unparse(a_t)
-        result = {}
-        exec(source_t, globals(), result)
-        fn_t = result[fn.__name__]
-        functools.update_wrapper(fn_t, fn)
-        return fn_t
+        pass
 
     return decorator
 

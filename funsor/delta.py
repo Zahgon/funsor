@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
 from functools import reduce
@@ -53,25 +51,16 @@ solve.register = _solve.register
 @solve.register(Variable, str, Domain, Funsor)
 @debug_logged
 def solve_variable(name, output, y):
-    assert y.output == output
-    point = y
-    log_density = Number(0)
-    return name, point, log_density
+    pass
 
 
 @solve.register(Unary, TransformOp, Funsor, Funsor)
 @debug_logged
 def solve_unary(op, arg, y):
-    x = op.inv(y)
-    name, point, log_density = solve(arg, x)
-    log_density += op.log_abs_det_jacobian(x, y)
-    return name, point, log_density
+    pass
 
 
 class DeltaMeta(FunsorMeta):
-    """
-    Makes Delta less of a pain to use by supporting Delta(name, point, log_density)
-    """
 
     def __call__(cls, *args):
         if len(args) > 1:
@@ -84,26 +73,6 @@ class DeltaMeta(FunsorMeta):
 
 
 class Delta(Funsor, metaclass=DeltaMeta):
-    """
-    Normalized delta distribution binding multiple variables.
-
-    There are three syntaxes supported for constructing Deltas::
-
-        Delta(((name1, (point1, log_density1)),
-               (name2, (point2, log_density2)),
-               (name3, (point3, log_density3))))
-
-    or for a single name::
-
-        Delta(name, point, log_density)
-
-    or for default ``log_density == 0``::
-
-        Delta(name, point)
-
-    :param tuple terms: A tuple of tuples of the form
-        ``(name, (point, log_density))``.
-    """
 
     def __init__(self, terms):
         assert isinstance(terms, tuple) and len(terms) > 0
@@ -134,147 +103,33 @@ class Delta(Funsor, metaclass=DeltaMeta):
         return Delta(new_terms)
 
     def eager_subs(self, subs):
-        subs = OrderedDict(subs)
-        new_terms = []
-        log_densities = []
-        for name, (point, log_density) in self.terms:
-            if name in subs:
-                value = subs[name]
-                assert value.output == point.output
-                if isinstance(value, Variable):
-                    new_terms.append((value.name, (point, log_density)))
-                    continue
-
-                if not any(
-                    d.dtype == "real"
-                    for side in (value, point)
-                    for d in side.inputs.values()
-                ):
-                    dtype = get_default_dtype()
-                    is_equal = ops.astype((value == point).all(), dtype)
-                    log_densities.append(is_equal.log() + log_density)
-                    continue
-
-                # Try to invert the substitution.
-                soln = solve(value, point)
-                if soln is None:
-                    return None  # lazily substitute
-                new_name, new_point, point_log_density = soln
-                new_terms.append(
-                    (new_name, (new_point, log_density + point_log_density))
-                )
-            else:
-                new_terms.append((name, (point, log_density)))
-
-        if not log_densities:
-            return Delta(tuple(new_terms))
-        elif not new_terms:
-            return reduce(ops.add, log_densities)
-        else:
-            return Delta(tuple(new_terms)) + reduce(ops.add, log_densities)
+        pass
 
     def eager_reduce(self, op, reduced_vars):
-        assert reduced_vars.issubset(self.inputs)
-        if op in (ops.max, ops.logaddexp):
-            if reduced_vars - self.fresh and self.fresh - reduced_vars:
-                result = self
-                if not reduced_vars.isdisjoint(self.fresh):
-                    result = result.eager_reduce(op, reduced_vars & self.fresh)
-                    if result is not self:
-                        if not reduced_vars.issubset(self.fresh):
-                            result = result.eager_reduce(op, reduced_vars - self.fresh)
-                            if result is not self:
-                                return result
-                return None
-
-            result_terms = [
-                (name, (point, log_density))
-                for name, (point, log_density) in self.terms
-                if name not in reduced_vars
-            ]
-
-            result_terms, scale = [], Number(0)
-            for name, (point, log_density) in self.terms:
-                if name in reduced_vars:
-                    # XXX obscenely wasteful - need a lazy Zero term
-                    if point.inputs:
-                        scale += (point == point).all().log()
-                    if log_density.inputs:
-                        scale += log_density * 0.0
-                else:
-                    result_terms.append((name, (point, log_density)))
-
-            result = Delta(tuple(result_terms)) + scale if result_terms else scale
-            return result.reduce(op, reduced_vars - self.fresh)
-
-        if op is ops.add:
-            raise NotImplementedError("TODO Implement ops.add to simulate .to_event().")
-
-        return None  # defer to default implementation
+        pass
 
     def _sample(self, sampled_vars, sample_inputs, rng_key):
-        return self
+        pass
 
 
 @eager.register(Binary, AddOp, Delta, Delta)
 def eager_add_multidelta(op, lhs, rhs):
-    if lhs.fresh.intersection(rhs.inputs):
-        return eager_add_delta_funsor(op, lhs, rhs)
-
-    if rhs.fresh.intersection(lhs.inputs):
-        return eager_add_funsor_delta(op, lhs, rhs)
-
-    return Delta(lhs.terms + rhs.terms)
+    pass
 
 
 @eager.register(Binary, (AddOp, SubOp), Delta, (Funsor, Align))
 def eager_add_delta_funsor(op, lhs, rhs):
-    if lhs.fresh.intersection(rhs.inputs):
-        rhs = rhs(
-            **{
-                name: point
-                for name, (point, log_density) in lhs.terms
-                if name in rhs.inputs
-            }
-        )
-        return op(lhs, rhs)
-
-    return None  # defer to default implementation
+    pass
 
 
 @eager.register(Binary, AddOp, (Funsor, Align), Delta)
 def eager_add_funsor_delta(op, lhs, rhs):
-    if rhs.fresh.intersection(lhs.inputs):
-        lhs = lhs(
-            **{
-                name: point
-                for name, (point, log_density) in rhs.terms
-                if name in lhs.inputs
-            }
-        )
-        return op(lhs, rhs)
-
-    return None
+    pass
 
 
 @eager.register(Independent, Delta, str, str, str)
 def eager_independent_delta(delta, reals_var, bint_var, diag_var):
-    for i, (name, (point, log_density)) in enumerate(delta.terms):
-        if name == diag_var:
-            bv = Variable(bint_var, delta.inputs[bint_var])
-            point = Lambda(bv, point)
-            if bint_var in log_density.inputs:
-                log_density = log_density.reduce(ops.add, bint_var)
-            else:
-                log_density = log_density * delta.inputs[bint_var].dtype
-            new_terms = (
-                delta.terms[:i]
-                + ((reals_var, (point, log_density)),)
-                + delta.terms[i + 1 :]
-            )
-            return Delta(new_terms)
-
-    return None
+    pass
 
 
 __all__ = [

@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import inspect
 import typing
@@ -17,19 +15,7 @@ from . import ops
 
 
 def eager_tensor_made_op(op, *args):
-    name_to_dim = {}
-    for arg in args:
-        for k, v in reversed(arg.inputs.items()):
-            if isinstance(v, BintType):
-                name_to_dim.setdefault(k, -1 - len(name_to_dim))
-    dim_to_name = {dim: name for name, dim in name_to_dim.items()}
-    try:
-        raw_args = [to_data(arg, name_to_dim=name_to_dim) for arg in args]
-    except PatternMissingError:
-        return None  # give up
-    data = op(*raw_args)
-    output = find_domain(op, *(arg.output for arg in args))
-    return to_funsor(data, output, dim_to_name=dim_to_name)
+    pass
 
 
 def make_op(fn):
@@ -58,19 +44,10 @@ def make_op(fn):
         raise NotImplementedError("TODO convert to a finitary")
     op = op_cls.make(fn)
 
-    # Register a find_domain implementation.
     @find_domain.register(type(op))
     def find_domain_made_op(op, *args):
-        if interpreter._TYPECHECK:
-            for arg, hint in zip(args, hints):
-                if hint is not None:
-                    assert deep_issubclass(arg, hint)
-        if isinstance(output_type, Dependent):
-            return output_type(**dict(zip(parameters, args)))
-        return output_type
+        pass
 
-    # Register an eager funsor rule.
-    # TODO generalize to more funsor types, ideally to Funsor itself.
     pattern = [funsor_cls, type(op)] + [(Number, Tuple, Tensor)] * arity
     eager.register(*pattern)(eager_tensor_made_op)
 

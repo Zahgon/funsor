@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import functools
 import os
@@ -39,7 +37,7 @@ def push_interpretation(new):
 
 
 def pop_interpretation():
-    return _STACK.pop()
+    pass
 
 
 class Interpreter:
@@ -117,21 +115,20 @@ def children(x):
     raise ValueError(type(x))
 
 
-# has to be registered in terms.py
 def children_funsor(x):
-    return x._ast_values
+    pass
 
 
 @children.register(tuple)
 @children.register(frozenset)
 def _children_tuple(x):
-    return x
+    pass
 
 
 @children.register(dict)
 @children.register(OrderedDict)
 def _children_tuple(x):
-    return x.values()
+    pass
 
 
 def is_atom(x):

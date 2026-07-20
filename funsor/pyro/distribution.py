@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
 
@@ -16,20 +14,6 @@ from funsor.terms import Funsor, to_funsor
 
 
 class FunsorDistribution(TorchDistribution):
-    """
-    :class:`~torch.distributions.Distribution` wrapper around a
-    :class:`~funsor.terms.Funsor` for use in Pyro code. This is typically used
-    as a base class for specific funsor inference algorithms wrapped in a
-    distribution interface.
-
-    :param funsor.terms.Funsor funsor_dist: A funsor with an input named
-        "value" that is treated as a random variable. The distribution should
-        be normalized over "value".
-    :param torch.Size batch_shape: The distribution's batch shape. This must
-        be in the same order as the input of the ``funsor_dist``, but may
-        contain extra dims of size 1.
-    :param event_shape: The distribution's event shape.
-    """
 
     arg_constraints = {}
 
@@ -53,10 +37,7 @@ class FunsorDistribution(TorchDistribution):
 
     @constraints.dependent_property
     def support(self):
-        if self.dtype == "real":
-            return constraints.real
-        else:
-            return constraints.integer_interval(0, self.dtype - 1)
+        pass
 
     def log_prob(self, value):
         if self._validate_args:
@@ -90,13 +71,7 @@ class FunsorDistribution(TorchDistribution):
         return value.detach()
 
     def rsample(self, sample_shape=torch.Size()):
-        delta = self._sample_delta(sample_shape)
-        assert (
-            not delta.log_density.requires_grad
-        ), "distribution is not fully reparametrized"
-        ndims = len(sample_shape) + len(self.batch_shape) + len(self.event_shape)
-        value = funsor_to_tensor(delta.terms[0][1][0], ndims=ndims)
-        return value
+        pass
 
     def expand(self, batch_shape, _instance=None):
         new = self._get_checked_instance(type(self), _instance)

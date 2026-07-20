@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import functools
 
@@ -39,26 +37,22 @@ def compile_funsor(expr: Funsor) -> OpProgram:
     """
     assert isinstance(expr, Funsor)
 
-    # Lower and convert to A-normal form.
     lowered_expr = lower(expr)
     anf = list(funsor.interpreter.anf(lowered_expr))
     ids = {}
 
-    # Collect constants (leaves).
     constants = []
     for f in anf:
         if isinstance(f, (Number, Tensor)):
             ids[f] = len(ids)
             constants.append(f.data)
 
-    # Collect input variables (leaves).
     inputs = []
     for k, d in expr.inputs.items():
         f = Variable(k, d)
         ids[f] = len(ids)
         inputs.append(k)
 
-    # Collect operations to be computed (internal nodes).
     operations = []
     for f in anf:
         if f in ids:
@@ -91,7 +85,6 @@ def lower(expr: Funsor) -> Funsor:
     :returns: A lowered funsor expression.
     :rtype: Funsor
     """
-    # FIXME should this be lazy? What about Lambda?
     with funsor.interpretations.reflect:
         return _lower(expr)
 
@@ -105,36 +98,27 @@ def _lower(x):
 @_lower.register(Tensor)
 @_lower.register(Variable)
 def _lower_atom(x):
-    return x
+    pass
 
 
 @_lower.register(Tuple)
 def _lower_tuple(x):
-    args = tuple(_lower(arg) for arg in x.args)
-    return Tuple(args)
+    pass
 
 
 @_lower.register(Unary)
 def _lower_unary(x):
-    arg = _lower(x.arg)
-    return Unary(x.op, arg)
+    pass
 
 
 @_lower.register(Binary)
 def _lower_binary(x):
-    lhs = _lower(x.lhs)
-    rhs = _lower(x.rhs)
-    return Binary(x.op, lhs, rhs)
+    pass
 
 
 @_lower.register(Contraction)
 def _lower_contraction(x):
-    if x.reduced_vars:
-        raise NotImplementedError("TODO")
-
-    terms = [_lower(term) for term in x.terms]
-    bin_op = functools.partial(Binary, x.bin_op)
-    return functools.reduce(bin_op, terms)
+    pass
 
 
 __all__ = [

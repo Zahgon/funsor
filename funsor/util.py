@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import functools
 import inspect
@@ -26,7 +24,6 @@ class lazy_property(object):
         setattr(obj, self.fn.__name__, value)
         return value
 
-    # This is needed to pacify sphinx.
     def __call__(self):
         raise ValueError
 
@@ -42,7 +39,6 @@ def getargspec(fn):
     try:
         args, vargs, kwargs, defaults, _, _, _ = inspect.getfullargspec(fn)
     except TypeError:
-        # Fall back to attempting to parse a PyTorch/NumPy-style docstring.
         match = re.match(r"\s*{}\(([^)]*)\)".format(fn.__name__), fn.__doc__)
         if match is None:
             raise
@@ -100,29 +96,11 @@ def pretty(arg, linewidth=75, threshold=1000):
 
 
 def _pprint_funsor(pprinter, object, stream, indent, allowance, context, level):
-    out = []
-    try:
-        old = quote.printoptions.copy()
-        quote.printoptions["threshold"] = 0  # Omit arrays from pprint.
-        _quote_inplace(object, 0, out)
-    finally:
-        quote.printoptions.update(old)
-
-    # This depends on internals of the pprint.PrettyPrinter class.
-    write = stream.write
-    for i, (extra_indent, line) in enumerate(out):
-        max_width = pprinter._width - indent - extra_indent
-        if len(line) > max_width:
-            line = line[: max_width - 3] + "..."
-        if i > 0:
-            write("\n")
-            write(" " * (indent + extra_indent))
-        write(line)
+    pass
 
 
 def register_pprint(cls):
     if hasattr(cls, "__repr__"):
-        # This depends on internals of the pprint.PrettyPrinter class.
         pprint.PrettyPrinter._dispatch[cls.__repr__] = _pprint_funsor
 
 
@@ -139,12 +117,11 @@ quote.reprtypes = ()
 
 
 def _quote_repr(arg, indent, out):
-    out.append((indent, repr(arg)))
+    pass
 
 
 def _quote_register_repr(typ):
-    quote.register(typ)(_quote_repr)
-    quote.reprtypes = tuple({typ}.union(quote.reprtypes))
+    pass
 
 
 quote.register_repr = _quote_register_repr
@@ -155,36 +132,12 @@ quote.register_repr(str)
 
 @quote.register(tuple)
 def _(arg, indent, out):
-    if all(isinstance(value, quote.reprtypes) for value in arg):
-        out.append((indent, repr(arg)))
-        return
-
-    for value in arg[:1]:
-        temp = []
-        quote.inplace(value, indent + 1, temp)
-        i, line = temp[0]
-        temp[0] = i - 1, "(" + line
-        out.extend(temp)
-        i, line = out[-1]
-        out[-1] = i, line + ","
-    for value in arg[1:]:
-        quote.inplace(value, indent + 1, out)
-        i, line = out[-1]
-        out[-1] = i, line + ","
-    i, line = out[-1]
-    out[-1] = i, line + ")"
+    pass
 
 
 @quote.register(np.ndarray)
 def _quote(arg, indent, out):
-    """
-    Work around NumPy ndarray not supporting reproducible repr.
-    """
-    if arg.size >= quote.printoptions["threshold"]:
-        data = "..." + " x ".join(str(d) for d in arg.shape) + "..."
-    else:
-        data = repr(arg.tolist())
-    out.append((indent, f"np.array({data}, dtype=np.{arg.dtype})"))
+    pass
 
 
 def broadcast_shape(*shapes, **kwargs):
@@ -333,16 +286,6 @@ def methodof(cls, name=None):
     """
 
     def decorator(fn):
-        name_ = name
-        if name_ is None:
-            fn_ = fn
-            while not hasattr(fn_, "__name__"):
-                if isinstance(fn_, property):
-                    fn_ = fn_.fget
-                else:
-                    fn_ = fn_.__func__
-            name_ = fn_.__name__
-        setattr(cls, name_, fn)
-        return fn
+        pass
 
     return decorator

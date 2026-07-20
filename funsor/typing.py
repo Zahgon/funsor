@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import functools
 import sys
@@ -10,9 +8,6 @@ import typing_extensions
 from multipledispatch.variadic import Variadic as _OrigVariadic
 from multipledispatch.variadic import isvariadic
 
-#################################
-# Runtime type-checking helpers
-#################################
 
 
 @functools.singledispatch
@@ -27,28 +22,17 @@ def deep_type(obj):
         assert deep_type((1, ("a",))) is typing.Tuple[int, typing.Tuple[str]]
         assert deep_type(frozenset(["a"])) is typing.FrozenSet[str]
     """
-    # compare to pytypes.deep_type(obj)
     return type(obj)
 
 
 @deep_type.register(tuple)
 def _deep_type_tuple(obj):
-    return typing.Tuple[tuple(map(deep_type, obj))] if obj else typing.Tuple
+    pass
 
 
 @deep_type.register(frozenset)
 def _deep_type_frozenset(obj):
-    if not obj:
-        return typing.FrozenSet
-    tp = deep_type(next(iter(obj)))
-    for x in obj:
-        if not deep_isinstance(x, tp):
-            tp = get_origin(tp)
-        if not deep_isinstance(x, tp):
-            raise NotImplementedError(
-                f"TODO handle inhomogeneous frozensets: {str(obj)}"
-            )
-    return typing.FrozenSet[tp]
+    pass
 
 
 _subclasscheck_registry = {}
@@ -65,73 +49,31 @@ def register_subclasscheck(cls):
     """
 
     def _fn(fn):
-        _subclasscheck_registry[cls] = fn
-        return fn
+        pass
 
     return _fn
 
 
 @register_subclasscheck(typing.Any)
 def _subclasscheck_any(cls, subcls):
-    return True
+    pass
 
 
 @register_subclasscheck(typing.Union)
 def _subclasscheck_union(cls, subcls):
-    """A basic ``__subclasscheck__`` method for :class:`~typing.Union`."""
-    return any(deep_issubclass(subcls, arg) for arg in get_args(cls))
+    pass
 
 
 @register_subclasscheck(frozenset)
 @register_subclasscheck(typing.FrozenSet)
 def _subclasscheck_frozenset(cls, subcls):
-    """A basic ``__subclasscheck__`` method for :class:`~typing.FrozenSet`."""
-
-    if not issubclass(get_origin(subcls), frozenset):
-        return False
-
-    cls_args, subcls_args = get_args(cls), get_args(subcls)
-
-    if not cls_args:
-        return True
-
-    if not subcls_args:
-        return cls_args[0] is typing.Any
-
-    return len(subcls_args) == len(cls_args) == 1 and all(
-        deep_issubclass(a, b) for a, b in zip(subcls_args, cls_args)
-    )
+    pass
 
 
 @register_subclasscheck(tuple)
 @register_subclasscheck(typing.Tuple)
 def _subclasscheck_tuple(cls, subcls):
-    """A basic ``__subclasscheck__`` method for :class:`~typing.Tuple`."""
-
-    if not issubclass(get_origin(subcls), get_origin(cls)):
-        return False
-
-    cls_args, subcls_args = get_args(cls), get_args(subcls)
-
-    if not cls_args:  # cls is base Tuple
-        return True
-
-    if not subcls_args:
-        return cls_args[0] is typing.Any
-
-    if cls_args[-1] is Ellipsis:  # cls variadic
-        if subcls_args[-1] is Ellipsis:  # both variadic
-            return deep_issubclass(subcls_args[0], cls_args[0])
-        return all(deep_issubclass(a, cls_args[0]) for a in subcls_args)
-
-    if subcls_args[-1] is Ellipsis:  # only subcls variadic
-        # issubclass(Tuple[A, ...], Tuple[X, Y]) == False
-        return False
-
-    # neither variadic
-    return len(cls_args) == len(subcls_args) and all(
-        deep_issubclass(a, b) for a, b in zip(subcls_args, cls_args)
-    )
+    pass
 
 
 @functools.lru_cache(maxsize=None)
@@ -160,9 +102,7 @@ def deep_issubclass(subcls, cls):
     :param subcls: A class that may be a subclass of ``cls``.
     :param cls: A class that may be a parent class of ``subcls``.
     """
-    # compare to pytypes.is_subtype(subcls, cls)
 
-    # handle unpacking
     if isinstance(subcls, _RuntimeSubclassCheckMeta):
         try:
             return deep_issubclass(subcls.__args__[0], cls)
@@ -204,7 +144,6 @@ def deep_isinstance(obj, cls):
     :param cls: A class that may be a parent class of ``obj``.
     """
 
-    # compare to pytypes.is_of_type(obj, cls)
     try:
         return deep_issubclass(deep_type(obj), cls)
     except TypeError:
@@ -217,9 +156,6 @@ def _type_to_typing(tp):
     return tp
 
 
-##############################################
-# Funsor-compatible typing introspection API
-##############################################
 
 
 def get_args(tp):
@@ -249,15 +185,9 @@ def get_type_hints(obj, globalns=None, localns=None, **kwargs):
     return typing.get_type_hints(obj, globalns=globalns, localns=localns, **kwargs)
 
 
-######################################################################
-# Metaclass for generating parametric types with Tuple-like variance
-######################################################################
 
 
 class GenericTypeMeta(type):
-    """
-    Metaclass to support subtyping with parameters for pattern matching, e.g. ``Number[int, int]``.
-    """
 
     def __init__(cls, name, bases, dct):
         super().__init__(name, bases, dct)
@@ -284,7 +214,6 @@ class GenericTypeMeta(type):
             ), "nested variadic types not supported"
             new_dct = cls.__dict__.copy()
             new_dct.update({"__args__": arg_types})
-            # type(cls) to handle GenericTypeMeta subclasses
             result = type(cls)(cls.__name__, (cls,), new_dct)
             cls._type_cache[arg_types] = result
             return result
@@ -317,9 +246,6 @@ class GenericTypeMeta(type):
         )
 
 
-##############################################################
-# Tools and overrides for typing-compatible multipledispatch
-##############################################################
 
 
 class _RuntimeSubclassCheckMeta(GenericTypeMeta):
@@ -332,9 +258,6 @@ class _RuntimeSubclassCheckMeta(GenericTypeMeta):
 
 
 class typing_wrap(metaclass=_RuntimeSubclassCheckMeta):
-    """
-    Utility callable for overriding the runtime behavior of :mod:`typing` objects.
-    """
 
     pass
 
@@ -347,9 +270,6 @@ class _DeepVariadicSignatureType(type):
 
 
 class Variadic(metaclass=_DeepVariadicSignatureType):
-    """
-    A typing-compatible drop-in replacement for :class:`~multipledispatch.variadic.Variadic`.
-    """
 
     pass
 

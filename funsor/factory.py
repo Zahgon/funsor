@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import inspect
 import typing
@@ -33,21 +31,6 @@ class FreshMeta(type):
 
 
 class Fresh(metaclass=FreshMeta):
-    """
-    Type hint for :func:`make_funsor` decorated functions. This provides hints
-    for fresh variables (names) and the return type.
-
-    Examples::
-
-        Fresh[Real]  # a constant known domain
-        Fresh[lambda x: Array[x.dtype, x.shape[1:]]  # args are Domains
-        Fresh[lambda x, y: Bint[x.size + y.size]]
-
-    :param callable fn: A lambda taking named arguments (in any order)
-        which will be filled in with the domain of the similarly named
-        funsor argument to the decorated function. This lambda should
-        compute a desired resulting domain given domains of arguments.
-    """
 
     def __init__(self, fn):
         function = type(lambda: None)
@@ -59,10 +42,6 @@ class Fresh(metaclass=FreshMeta):
 
 
 class Bound:
-    """
-    Type hint for :func:`make_funsor` decorated functions. This provides hints
-    for bound variables (names).
-    """
 
     pass
 
@@ -85,47 +64,6 @@ class HasMeta(type):
 
 
 class Has(metaclass=HasMeta):
-    """
-    Type hint for :func:`make_funsor` decorated functions.
-
-    This hint asserts that a set of :class:`Bound` variables
-    always appear in the ``.inputs`` of the annotated argument.
-
-    For example, we could write a named ``matmul`` function that
-    asserts that both arguments always contain the reduced input,
-    and cannot be constant with respect to that input::
-
-        @make_funsor
-        def MatMul(
-            x: Has[{"i"}],
-            y: Has[{"i"}],
-            i: Bound,
-        ) -> Fresh[lambda x: x]:
-            return (x * y).reduce(ops.add, i)
-
-    Here the string ``"i"`` in the annotations for ``x`` and ``y``
-    refer to the argument ``i`` of our ``MatMul`` function,
-    which is known to be ``Bound`` (i.e it does not appear in the
-    ``.inputs`` of evaluating ``Matmul(x, y, "i")``.
-
-    .. warning ::
-
-        This annotation is experimental and may be removed in the future.
-
-        Note that because Funsor is inherently extensional,
-        violating a `Has` constraint only raises a :class:`SyntaxWarning`
-        rather than a full :class:`TypeError`  and even then only under
-        the :func:`~funsor.interpretations.reflect`  interpretation.
-
-        As such, :class:`Has` annotations should be used sparingly,
-        reserved for cases where the programmer has complete control
-        over the inputs to a function and knows that an argument
-        will always depend on a bound variable, e.g. when writing one-off
-        Funsor terms to describe custom layers in a neural network.
-
-    :param set bound: A :class:`~builtins.set` of strings of names of
-        :class:`Bound` arguments of a :func:`make_funsor` -decorated function.
-    """
 
     def __init__(self, bound):
         assert isinstance(bound, set)
@@ -186,7 +124,6 @@ def make_funsor(fn):
         def __call__(cls, *args):
             args = list(args)
 
-            # Compute domains of bound variables.
             for i, (name, arg) in enumerate(zip(cls._ast_fields, args)):
                 hint = input_types[name]
                 if hint is Funsor or isinstance(hint, Has):  # TODO support domains
@@ -207,7 +144,6 @@ def make_funsor(fn):
                         )
                     args[i] = arg
 
-            # Compute domains of fresh variables.
             dependent_args = _get_dependent_args(cls._ast_fields, hints, args)
             for i, (hint, arg) in enumerate(zip(hints, args)):
                 if isinstance(hint, Fresh):
@@ -274,4 +210,4 @@ def _hint_to_pattern(t):
 
 @_hint_to_pattern.register(Value)
 def _(t):
-    return t.value_type
+    pass

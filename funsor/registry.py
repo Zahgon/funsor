@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from collections import defaultdict
 
@@ -9,9 +7,6 @@ from funsor.typing import Variadic, deep_type, get_origin, get_type_hints, typin
 
 
 class PartialDispatcher(Dispatcher):
-    """
-    Wrapper to avoid appearance in stack traces.
-    """
 
     def __init__(self, default=None, name="PartialDispatcher"):
         self.default = default if default is None else PartialDefault(default)
@@ -20,20 +15,17 @@ class PartialDispatcher(Dispatcher):
             self.add(([object],), self.default)
 
     def add(self, signature, func):
-        # Handle annotations
         if not signature:
             annotations = get_type_hints(func)
             annotations.pop("return", None)
             if annotations:
                 signature = tuple(annotations.values())
 
-        # Handle some union types by expanding at registration time
         if any(isinstance(typ, tuple) for typ in signature):
             for typs in expand_tuples(signature):
                 self.add(typs, func)
             return
 
-        # Handle variadic types
         signature = (
             Variadic[tuple(tp)] if isinstance(tp, list) else tp for tp in signature
         )
@@ -76,19 +68,14 @@ class PartialDefault:
 
 class KeyedRegistry(object):
     def __init__(self, default=None):
-        # TODO make registry a WeakKeyDictionary
         self.default = default if default is None else PartialDefault(default)
         self.registry = defaultdict(lambda: PartialDispatcher(default=default))
 
     def register(self, key, *types):
         register = self.registry[get_origin(key)].register
 
-        # This decorator supports stacking multiple decorators, which is not
-        # supported by multipledipatch (which returns a Dispatch object rather
-        # than the original function).
         def decorator(fn):
-            register(*types)(fn)
-            return fn
+            pass
 
         return decorator
 

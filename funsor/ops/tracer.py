@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
 from functools import singledispatch
@@ -10,7 +8,7 @@ from .program import OpProgram
 
 
 def _debug(x):
-    return f"{type(x).__module__.split('.')[0]}.{type(x).__name__}({hex(id(x))[2:]})"
+    pass
 
 
 def trace_function(fn, kwargs: dict, *, allow_constants=False):
@@ -37,18 +35,15 @@ def trace_function(fn, kwargs: dict, *, allow_constants=False):
     :returns: An op program.
     :rtype: ~funsor.ops.program.OpProgram
     """
-    # Extract kwargs.
     assert isinstance(kwargs, dict)
     assert all(is_variable(v) for v in kwargs.values())
     kwarg_ids = {id(v) for v in kwargs.values()}
     assert len(kwarg_ids) == len(kwargs), "repeated inputs"
 
-    # Trace the function.
     with trace_ops(is_variable) as trace:
         root = fn(**kwargs)
     assert is_variable(root)
 
-    # Extract relevant portion of trace.
     dag = OrderedDict({id(root): (root, None, None)})
     for result, op, args in reversed(trace.values()):  # backward
         if id(result) not in dag or not is_variable(result):
@@ -58,7 +53,6 @@ def trace_function(fn, kwargs: dict, *, allow_constants=False):
         dag[id(result)] = result, op, args
     anf = list(reversed(dag.values()))  # forward
 
-    # Collect constants (leaves).
     ids = {}
     constants = []
     for result, op, args in anf:
@@ -68,13 +62,11 @@ def trace_function(fn, kwargs: dict, *, allow_constants=False):
             if not allow_constants and is_variable(result):
                 raise ValueError(f"Found constant: {repr(result)}")
 
-    # Collect inputs (leaves).
     inputs = []
     for name, value in kwargs.items():
         ids[id(value)] = len(ids)
         inputs.append(name)
 
-    # Collect operations to be computed (internal nodes).
     operations = []
     for result, op, args in anf:
         if id(result) in ids:
@@ -98,17 +90,17 @@ def is_variable(x):
 
 @is_variable.register(int)
 def _is_variable_int(x):
-    return type(x) is not int  # allow numpy types
+    pass
 
 
 @is_variable.register(float)
 def _is_variable_float(x):
-    return type(x) is not float  # allow numpy types
+    pass
 
 
 @is_variable.register(tuple)
 def _is_variable_tuple(x):
-    return any(map(is_variable, x))
+    pass
 
 
 __all__ = [

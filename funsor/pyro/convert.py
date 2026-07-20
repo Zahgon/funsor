@@ -1,19 +1,4 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
-"""
-This module follows a convention for converting between funsors and PyTorch
-distribution objects. This convention is compatible with NumPy/PyTorch-style
-broadcasting. Following PyTorch distributions (and Tensorflow distributions),
-we consider "event shapes" to be on the right and broadcast-compatible "batch
-shapes" to be on the left.
-
-This module also aims to be forgiving in inputs and pedantic in outputs:
-methods accept either the superclass :class:`torch.distributions.Distribution`
-objects or the subclass :class:`pyro.distributions.TorchDistribution` objects.
-Methods return only the narrower subclass
-:class:`pyro.distributions.TorchDistribution` objects.
-"""
 
 import math
 from collections import OrderedDict
@@ -29,8 +14,6 @@ from funsor.interpreter import gensym
 from funsor.tensor import Tensor
 from funsor.terms import Independent, Variable, to_data, to_funsor
 
-# Conversion functions use fixed names for Pyro batch dims, but
-# accept an event_inputs tuple for custom event dim names.
 DIM_TO_NAME = tuple(map("_pyro_dim_{}".format, range(-100, 0)))
 NAME_TO_DIM = dict(zip(DIM_TO_NAME, range(-100, 0)))
 
@@ -241,9 +224,7 @@ def matrix_and_mvn_to_funsor(
     x_size, y_size = matrix.shape[-2:]
     assert mvn.event_shape == (y_size,)
 
-    # Handle diagonal normal distributions as an efficient special case.
     if isinstance(mvn, torch.distributions.Independent):
-        # Create an i-batched Gaussian over x and y_i.
         log_prob = -0.5 * y_size * math.log(
             2 * math.pi
         ) - mvn.base_dist.scale.log().sum(-1)
@@ -263,19 +244,9 @@ def matrix_and_mvn_to_funsor(
         inputs[y_i.name] = Real
         g_i = Gaussian(white_vec=white_vec, prec_sqrt=prec_sqrt, inputs=inputs)
 
-        # Convert to a joint Gaussian over x and y, possibly lazily.
-        # This expands the y part of the matrix from linear to square,
-        # incurring asymptotic increase O((X+1)Y) ==> O((X+Y)Y).
-        #
-        #   [ ? ? ? ? ? | ? ]      [ ? ? ? ? ? | ? . . . ]
-        #   [ ? ? ? ? ? | ? ] ===> [ ? ? ? ? ? | . ? . . ]
-        #   [ ? ? ? ? ? | ? ]      [ ? ? ? ? ? | . . ? . ]
-        #   [ ? ? ? ? ? | ? ]      [ ? ? ? ? ? | . . . ? ]
         g = Independent(g_i, y_name, i.name, y_i.name)
-        # Equivalently, g_i(**{y_i.name: y[i]}).reduce(ops.add, i)
         return g + log_prob
 
-    # Create a rank-y Gaussian over (x,y).
     log_prob = -0.5 * y_size * math.log(2 * math.pi) - mvn.scale_tril.diagonal(
         dim1=-1, dim2=-2
     ).log().sum(-1)
@@ -288,7 +259,6 @@ def matrix_and_mvn_to_funsor(
     white_vec = (-mvn.loc[..., None, :] @ prec_sqrt_y)[..., 0, :]
     white_vec = white_vec.expand(prec_sqrt.shape[:-2] + (-1,))
 
-    # Note the round trip tensor_to_funsor(...).data strips leading 1's from the shape.
     white_vec = tensor_to_funsor(white_vec, event_dims, 1)
     prec_sqrt = tensor_to_funsor(prec_sqrt, event_dims, 2)
     inputs = white_vec.inputs.copy()

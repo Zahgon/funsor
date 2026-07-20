@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from collections import defaultdict
 from collections.abc import Hashable
@@ -84,13 +82,10 @@ class AdjointTape(Interpretation):
                 else:
                     continue
 
-            # reverse the effects of alpha-renaming
             with reflect:
                 lazy_output = self._eager_to_lazy[output]
                 lazy_fn = type(lazy_output)
                 lazy_inputs = lazy_output._ast_values
-                # TODO abstract this into a helper function
-                # FIXME make lazy_output linear instead of quadratic in the size of the tape
                 lazy_other_subs = tuple(
                     (name, to_funsor(name.split("__BOUND")[0], domain))
                     for name, domain in lazy_output.inputs.items()
@@ -115,7 +110,6 @@ class AdjointTape(Interpretation):
 
             in_adjs = adjoint_ops(fn, sum_op, bin_op, adjoint_values[output], *inputs)
             for v, adjv in in_adjs:
-                # Marginalize out message variables that don't appear in recipients.
                 agg_vars = adjv.input_vars - v.input_vars - root.input_vars - batch_vars
                 assert "particle" not in {var.name for var in agg_vars}  # DEBUG FIXME
                 old_value = adjoint_values[v]
@@ -133,7 +127,6 @@ class AdjointTape(Interpretation):
 
 def forward_backward(sum_op, bin_op, expr, *, batch_vars=frozenset()):
     with AdjointTape() as tape:
-        # TODO fix traversal order in AdjointTape instead of using stack_reinterpret
         forward = stack_reinterpret(expr)
     backward = tape.adjoint(sum_op, bin_op, forward, batch_vars=batch_vars)
     return forward, backward
@@ -144,7 +137,6 @@ def adjoint(sum_op, bin_op, expr):
     return backward
 
 
-# logaddexp/add
 def _fail_default(*args):
     raise NotImplementedError("Should not be here! {}".format(args))
 
@@ -161,29 +153,14 @@ if instrument.DEBUG:
     Binary, AssociativeOp, AssociativeOp, Funsor, AssociativeOp, Funsor, Funsor
 )
 def adjoint_binary(adj_sum_op, adj_prod_op, out_adj, op, lhs, rhs):
-    if op is adj_prod_op:
-        lhs_adj = adj_prod_op(out_adj, rhs)
-        rhs_adj = adj_prod_op(out_adj, lhs)
-        return ((lhs, lhs_adj), (rhs, rhs_adj))
-    elif op is adj_sum_op:
-        return ((lhs, out_adj), (rhs, out_adj))
-    raise ValueError("should not be here!")
+    pass
 
 
 @adjoint_ops.register(
     Reduce, AssociativeOp, AssociativeOp, Funsor, AssociativeOp, Funsor, frozenset
 )
 def adjoint_reduce(adj_sum_op, adj_prod_op, out_adj, op, arg, reduced_vars):
-    if op is adj_sum_op:
-        out_adj = Approximate(
-            adj_sum_op, out_adj, adj_prod_op(out_adj, arg), reduced_vars
-        )
-        return ((arg, out_adj),)
-    elif op is adj_prod_op:  # plate!
-        out = arg.reduce(adj_prod_op, reduced_vars)
-        div_op = ops.SAFE_BINARY_INVERSES[adj_prod_op]
-        return ((arg, div_op(adj_prod_op(out_adj, out), arg)),)
-    raise ValueError("should not be here!")
+    pass
 
 
 @adjoint_ops.register(
@@ -199,7 +176,7 @@ def adjoint_reduce(adj_sum_op, adj_prod_op, out_adj, op, arg, reduced_vars):
 def adjoint_contract_unary(
     adj_sum_op, adj_prod_op, out_adj, sum_op, prod_op, reduced_vars, arg
 ):
-    return adjoint_reduce(adj_sum_op, adj_prod_op, out_adj, sum_op, arg, reduced_vars)
+    pass
 
 
 @adjoint_ops.register(
@@ -215,17 +192,7 @@ def adjoint_contract_unary(
 def adjoint_contract_generic(
     adj_sum_op, adj_prod_op, out_adj, sum_op, prod_op, reduced_vars, terms
 ):
-    assert len(terms) == 1 or len(terms) == 2
-    return adjoint_ops(
-        Contraction,
-        adj_sum_op,
-        adj_prod_op,
-        out_adj,
-        sum_op,
-        prod_op,
-        reduced_vars,
-        *terms
-    )
+    pass
 
 
 @adjoint_ops.register(
@@ -242,56 +209,17 @@ def adjoint_contract_generic(
 def adjoint_contract(
     adj_sum_op, adj_prod_op, out_adj, sum_op, prod_op, reduced_vars, lhs, rhs
 ):
-    if prod_op is adj_prod_op and sum_op in (ops.null, adj_sum_op):
-        # the only change is here:
-        out_adj = Approximate(
-            adj_sum_op,
-            out_adj,
-            adj_prod_op(out_adj, adj_prod_op(lhs, rhs)),
-            reduced_vars,
-        )
-
-        lhs_adj = adj_prod_op(out_adj, rhs)
-        rhs_adj = adj_prod_op(lhs, out_adj)
-        return ((lhs, lhs_adj), (rhs, rhs_adj))
-
-    elif prod_op is adj_sum_op:
-        if reduced_vars:
-            raise NotImplementedError("TODO implement sum Contraction")
-        return ((lhs, out_adj), (rhs, out_adj))
-
-    raise ValueError("should not be here!")
+    pass
 
 
 @adjoint_ops.register(Cat, AssociativeOp, AssociativeOp, Funsor, str, tuple, str)
 def adjoint_cat(adj_sum_op, adj_prod_op, out_adj, name, parts, part_name):
-    if part_name not in out_adj.inputs:
-        return tuple((part, out_adj) for part in parts)
-    in_adjs = []
-    start = 0
-    size = sum(part.inputs[part_name].dtype for part in parts)
-    for i, part in enumerate(parts):
-        part_slice = Slice(name, start, start + part.inputs[part_name].dtype, 1, size)
-        part_adj = out_adj(**{name: part_slice})
-        in_adjs.append((part, part_adj))
-        start += part.inputs[part_name].dtype
-    return tuple(in_adjs)
+    pass
 
 
 @adjoint_ops.register(Subs, AssociativeOp, AssociativeOp, Funsor, Funsor, tuple)
 def adjoint_subs(adj_sum_op, adj_prod_op, out_adj, arg, subs):
-    # detect fresh variable collisions that should be relabeled and reduced
-    relabel = {k: interpreter.gensym(k) for k, v in subs}
-    relabeled_subs = tuple((relabel[k], v) for k, v in subs)
-    relabeled_arg = arg(**relabel)
-
-    reduced_vars = out_adj.input_vars - relabeled_arg.input_vars
-    for k, v in subs:
-        reduced_vars |= v.input_vars - relabeled_arg.input_vars
-
-    relabeled_arg_adj = Scatter(adj_sum_op, relabeled_subs, out_adj, reduced_vars)
-    arg_adj = relabeled_arg_adj(**{v: k for k, v in relabel.items()})
-    return ((arg, arg_adj),)
+    pass
 
 
 @adjoint_ops.register(
@@ -305,4 +233,4 @@ def adjoint_subs(adj_sum_op, adj_prod_op, out_adj, arg, subs):
     frozenset,
 )
 def adjoint_scatter(adj_sum_op, adj_prod_op, out_adj, op, subs, source, reduced_vars):
-    return ((source, out_adj(**dict(subs)).reduce(adj_sum_op, reduced_vars)),)
+    pass

@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 import math
 import numbers
@@ -39,7 +37,6 @@ from .op import (
 _builtin_all = all
 _builtin_any = any
 
-# This is used only for pattern matching.
 array = (np.ndarray, np.generic)
 arraylist = typing.Tuple[typing.Union[array], ...]
 
@@ -50,19 +47,16 @@ tanh.register(array)(np.tanh)
 atanh.register(array)(np.arctanh)
 
 
-###########################################
-# Reduction Ops
-###########################################
 
 
 @ReductionOp.make
 def all(x, axis=None, keepdims=False):
-    return np.all(x, axis, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
 def any(x, axis=None, keepdims=False):
-    return np.any(x, axis, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
@@ -72,23 +66,22 @@ def amax(x, axis=None, keepdims=False):
 
 @ReductionOp.make
 def amin(x, axis=None, keepdims=False):
-    return np.amin(x, axis, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
 def sum(x, axis=None, keepdims=False):
-    return np.sum(x, axis, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
 def prod(x, axis=None, keepdims=False):
-    return np.prod(x, axis, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
 def logsumexp(x, axis=None, keepdims=False):
     amax = np.amax(x, axis=axis, keepdims=True)
-    # treat the case x = -inf
     amax = np.where(np.isfinite(amax), amax, 0.0)
     unnormalized_lse = log(np.sum(np.exp(x - amax), axis, keepdims=keepdims))
     amax = amax if keepdims else amax.squeeze(axis)
@@ -97,58 +90,49 @@ def logsumexp(x, axis=None, keepdims=False):
 
 @ReductionOp.make
 def mean(x, axis=None, keepdims=False):
-    return np.mean(x, axis, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
 def std(x, axis=None, ddof=0, keepdims=False):
-    return np.std(x, axis, ddof=ddof, keepdims=keepdims)
+    pass
 
 
 @ReductionOp.make
 def var(x, axis=None, ddof=0, keepdims=False):
-    return np.var(x, axis, ddof=ddof, keepdims=keepdims)
+    pass
 
 
-###########################################
 
 
 @UnaryOp.make
 def argmax(x, axis=None, keepdims=False):
-    if keepdims:
-        return np.expand_dims(np.argmax(x, axis), axis)
-    return np.argmax(x, axis)
+    pass
 
 
 @UnaryOp.make
 def argmin(x, axis=None, keepdims=False):
-    if keepdims:
-        return np.expand_dims(np.argmin(x, axis), axis)
-    return np.argmin(x, axis)
+    pass
 
 
 @UnaryOp.make
 def isnan(x):
-    return np.isnan(x)
+    pass
 
 
 @UnaryOp.make
 def full_like(prototype, fill_value):
-    return np.full_like(prototype, fill_value)
+    pass
 
 
 @log.register(array)
 def _log(x):
-    if x.dtype == "bool":
-        return np.where(x, 0.0, -math.inf)
-    with np.errstate(divide="ignore"):  # skip the warning of log(0.)
-        return np.log(x)
+    pass
 
 
 @AssociativeOp.make
 def logaddexp(x, y):
-    shift = max(detach(x), detach(y))
-    return log(exp(x - shift) + exp(y - shift)) + shift
+    pass
 
 
 sample = logaddexp.make(logaddexp.default, name="sample")
@@ -176,7 +160,7 @@ def astype(x, dtype):
 
 @astype.register(array)
 def _astype(x, dtype):
-    return x.astype(dtype)
+    pass
 
 
 @FinitaryOp.make
@@ -207,24 +191,18 @@ def cholesky(x):
 
 @UnaryOp.make
 def cholesky_inverse(x):
-    """
-    Like :func:`torch.cholesky_inverse` but supports batching and gradients.
-    """
-    return cholesky_solve(new_eye(x, x.shape[:-1]), x)
+    pass
 
 
 @BinaryOp.make
 def cholesky_solve(x, y):
-    y_inv = np.linalg.inv(y)
-    A = np.swapaxes(y_inv, -2, -1) @ y_inv
-    return A @ x
+    pass
 
 
 @UnaryOp.make
 def qr(x, mode="reduced"):
     if len(x.shape) == 2:
         return np.linalg.qr(x, mode=mode)
-    # Manually vectorize.
     batch_shape, event_shape = x.shape[:-2], x.shape[-2:]
     flat_Qs = []
     flat_Rs = []
@@ -249,7 +227,7 @@ def diagonal(x, dim1, dim2):
 
 @diagonal.register(array)
 def _diagonal(x, dim1, dim2):
-    return np.diagonal(x, axis1=dim1, axis2=dim2)
+    pass
 
 
 @FinitaryOp.make
@@ -259,7 +237,7 @@ def einsum(operands, equation):
 
 @einsum.register(arraylist)
 def _einsum(operands, equation):
-    return np.einsum(equation, *operands)
+    pass
 
 
 @UnaryOp.make
@@ -277,7 +255,6 @@ def finfo(x):
     return np.finfo(x.dtype)
 
 
-# this isn't really a mathematical op
 @singledispatch
 def is_numeric_array(x):
     """
@@ -290,26 +267,22 @@ for typ in array:
 
     @is_numeric_array.register(typ)
     def _is_numeric_array(x):
-        return True
+        pass
 
 
 @logaddexp.register(array, array)
 def _safe_logaddexp_tensor_tensor(x, y):
-    finfo = np.finfo(x.dtype)
-    shift = np.clip(max(detach(x), detach(y)), finfo.min, None)
-    return np.log(np.exp(x - shift) + np.exp(y - shift)) + shift
+    pass
 
 
 @logaddexp.register(numbers.Number, array)
 def _safe_logaddexp_number_tensor(x, y):
-    finfo = np.finfo(y.dtype)
-    shift = np.clip(detach(y), max(x, finfo.min), None)
-    return np.log(np.exp(x - shift) + np.exp(y - shift)) + shift
+    pass
 
 
 @logaddexp.register(array, numbers.Number)
 def _safe_logaddexp_tensor_number(x, y):
-    return _safe_logaddexp_number_tensor(y, x)
+    pass
 
 
 max.register(array, array)(np.maximum)
@@ -318,22 +291,22 @@ min.register(array, array)(np.minimum)
 
 @max.register((int, float), array)
 def _max(x, y):
-    return np.clip(y, x, None)
+    pass
 
 
 @max.register(array, (int, float))
 def _max(x, y):
-    return np.clip(x, y, None)
+    pass
 
 
 @min.register((int, float), array)
 def _min(x, y):
-    return np.clip(y, None, x)
+    pass
 
 
 @min.register(array, (int, float))
 def _min(x, y):
-    return np.clip(x, None, y)
+    pass
 
 
 @UnaryOp.make
@@ -343,11 +316,7 @@ def new_arange(x, start=None, stop=None, step=None):
 
 @new_arange.register(array)
 def _new_arange(x, start, stop, step):
-    if step is not None:
-        return np.arange(start, stop, step)
-    if stop is not None:
-        return np.arange(start, stop)
-    return np.arange(start)
+    pass
 
 
 @UnaryOp.make
@@ -379,28 +348,19 @@ def permute(x, dims):
 
 @reciprocal.register(array)
 def _reciprocal(x):
-    result = np.clip(np.reciprocal(x), None, np.finfo(x.dtype).max)
-    return result
+    pass
 
 
 @safediv.register(array, array)
 @safediv.register(numbers.Number, array)
 def _safediv(x, y):
-    try:
-        finfo = np.finfo(y.dtype)
-    except ValueError:
-        finfo = np.iinfo(y.dtype)
-    return x * np.clip(np.reciprocal(y), None, finfo.max)
+    pass
 
 
 @safesub.register(array, array)
 @safesub.register(numbers.Number, array)
 def _safesub(x, y):
-    try:
-        finfo = np.finfo(y.dtype)
-    except ValueError:
-        finfo = np.iinfo(y.dtype)
-    return x + np.clip(-y, None, finfo.max)
+    pass
 
 
 @TernaryOp.make
@@ -410,9 +370,7 @@ def scatter(destin, indices, source):
 
 @scatter.register(array, tuple, array)
 def _scatter(destin, indices, source):
-    result = destin.copy()
-    result[indices] = source
-    return result
+    pass
 
 
 @TernaryOp.make
@@ -422,9 +380,7 @@ def scatter_add(destin, indices, source):
 
 @scatter_add.register(array, tuple, array)
 def _scatter_add(destin, indices, source):
-    result = destin.copy()
-    np.add.at(result, indices, source)
-    return result
+    pass
 
 
 @FinitaryOp.make

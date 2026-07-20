@@ -1,5 +1,3 @@
-# Copyright Contributors to the Pyro project.
-# SPDX-License-Identifier: Apache-2.0
 
 from collections import OrderedDict
 from functools import reduce, singledispatch
@@ -50,65 +48,32 @@ def _affine_inputs(fn):
     return frozenset()
 
 
-# Make registration public.
 affine_inputs.register = _affine_inputs.register
 
 
 @affine_inputs.register(Variable)
 def _(fn):
-    return _real_inputs(fn)
+    pass
 
 
 @affine_inputs.register(Unary)
 def _(fn):
-    if fn.op in (ops.neg, ops.sum) or isinstance(
-        fn.op, (ops.ReshapeOp, ops.GetsliceOp)
-    ):
-        return affine_inputs(fn.arg)
-    return frozenset()
+    pass
 
 
 @affine_inputs.register(Binary)
 def _(fn):
-    if fn.op in (ops.add, ops.sub):
-        return affine_inputs(fn.lhs) | affine_inputs(fn.rhs)
-    if fn.op is ops.truediv:
-        return affine_inputs(fn.lhs) - _real_inputs(fn.rhs)
-    if isinstance(fn.op, ops.GetitemOp):
-        return affine_inputs(fn.lhs)
-    if fn.op in (ops.mul, ops.matmul):
-        lhs_affine = affine_inputs(fn.lhs) - _real_inputs(fn.rhs)
-        rhs_affine = affine_inputs(fn.rhs) - _real_inputs(fn.lhs)
-        if not lhs_affine:
-            return rhs_affine
-        if not rhs_affine:
-            return lhs_affine
-        # This multilinear case introduces incompleteness, since some vars
-        # could later be reduced, making remaining vars affine.
-        return frozenset()
-    return frozenset()
+    pass
 
 
 @affine_inputs.register(Reduce)
 def _(fn):
-    return affine_inputs(fn.arg) - fn.reduced_vars
+    pass
 
 
 @affine_inputs.register(Finitary[ops.EinsumOp, tuple])
 def _(fn):
-    # This is simply a multiary version of the above Binary(ops.mul, ...) case.
-    results = []
-    for i, x in enumerate(fn.args):
-        others = fn.args[:i] + fn.args[i + 1 :]
-        other_inputs = reduce(ops.or_, map(_real_inputs, others), frozenset())
-        results.append(affine_inputs(x) - other_inputs)
-    # This multilinear case introduces incompleteness, since some vars
-    # could later be reduced, making remaining vars affine.
-    if sum(map(bool, results)) == 1:
-        for result in results:
-            if result:
-                return result
-    return frozenset()
+    pass
 
 
 def extract_affine(fn):
@@ -137,15 +102,12 @@ def extract_affine(fn):
         ``(coefficient, eqn)`` pair in einsum form.
     :rtype: tuple
     """
-    # NB: this depends on the global default backend.
     prototype = get_default_prototype()
-    # Determine constant part by evaluating fn at zero.
     inputs = affine_inputs(fn)
     inputs = OrderedDict((k, v) for k, v in fn.inputs.items() if k in inputs)
     zeros = {k: Tensor(ops.new_zeros(prototype, v.shape)) for k, v in inputs.items()}
     const = fn(**zeros)
 
-    # Determine linear coefficients by evaluating fn on basis vectors.
     name = gensym("probe")
     coeffs = OrderedDict()
     for k, v in inputs.items():
